@@ -1,7 +1,8 @@
 /**
  * pxpush-style scroll motion — native document flow (always scrollable
  * both ways). Sections shove previous content up by normal scrolling.
- * Effects: expand-on-enter, clip reveal, marquee drift with scroll velocity.
+ * Effects: expand-on-enter, clip reveal, soft hero leave.
+ * Marquees keep their constant CSS glide (no scroll-velocity drift).
  */
 
 const reduceMotion = () =>
@@ -13,7 +14,6 @@ function clamp(x, lo, hi) {
 
 export function initScrollMotion() {
   const bands = [...document.querySelectorAll('.band.reveal, .desk-top')];
-  const marquees = [...document.querySelectorAll('.band__marquee-track, .hero__marquee-track')];
 
   document.documentElement.classList.add('has-scroll-motion');
 
@@ -53,34 +53,13 @@ export function initScrollMotion() {
   // Soft parallax on leaving hero (opacity only — no layout-breaking scale)
   const hero = document.querySelector('.desk-top');
   let raf = 0;
-  let lastY = window.scrollY;
-  let vel = 0;
 
   function tick() {
     raf = 0;
-    const y = window.scrollY || 0;
-    const vh = window.innerHeight || 1;
-    const dy = y - lastY;
-    lastY = y;
-    vel = vel * 0.85 + dy * 0.15;
-
-    if (hero) {
-      const r = hero.getBoundingClientRect();
-      // Fade/lift hero content as it scrolls away (pxpush intro energy)
-      const leave = clamp(-r.top / Math.max(r.height * 0.65, 1), 0, 1);
-      hero.style.setProperty('--hero-leave', leave.toFixed(3));
-    }
-
-    const drift = clamp(vel * 0.4, -32, 32);
-    for (const m of marquees) {
-      m.style.setProperty('--marquee-drift', `${drift.toFixed(2)}px`);
-    }
-
-    // Velocity-aware marquee speed
-    const speed = clamp(1 + Math.abs(vel) * 0.04, 0.7, 2.4);
-    for (const m of marquees) {
-      m.style.animationDuration = `${(28 / speed).toFixed(2)}s`;
-    }
+    if (!hero) return;
+    const r = hero.getBoundingClientRect();
+    const leave = clamp(-r.top / Math.max(r.height * 0.65, 1), 0, 1);
+    hero.style.setProperty('--hero-leave', leave.toFixed(3));
   }
 
   function onScroll() {
