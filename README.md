@@ -12,7 +12,10 @@ true-peak ceiling.
 ## What it actually does
 
 This is not a toy — it runs a real mastering signal chain built on the Web Audio
-API and a from-scratch loudness engine:
+API and a from-scratch loudness engine. The processing philosophy follows
+**published Mixea-style controls** (Intensity × warmer/brighter EQ) and
+**Dolby Music loudness / clarity guidance** (ITU-R BS.1770, −1 dBTP, mono-safe
+bass, anti-masking) — not proprietary Dolby or Mixea code.
 
 1. **Analysis** — decodes the file at its native sample rate and measures:
    - **Integrated / short-term / momentary loudness** via a from-scratch
@@ -20,17 +23,18 @@ API and a from-scratch loudness engine:
      gating). Calibration verified against `pyloudnorm` (within ~0.05 LU).
    - **Spectral balance** across 8 bands (sub → air) via FFT.
    - **Dynamics** (crest factor), **sample/true peak**, and **stereo** width.
-2. **Content-aware EQ** — compares the track's measured spectrum to the chosen
-   genre's target *signature* and applies gentle corrective peaking filters to
-   move it toward that standard.
-3. **Stem-aware dynamics** — a 4-band compressor treats **bass**, **low-mid
-   (drum body)**, **mids (vocals/instrumental)** and **highs** separately, with
-   genre-specific thresholds/ratios.
-4. **Mid/Side vocal & width shaping** — vocal presence + de-ess on the mid
-   (center) channel, air + widening on the sides, with **bass kept mono**.
-5. **Glue + analog-style saturation** on the bus.
-6. **Loudness normalization** to the target LUFS, followed by a **look-ahead
-   true-peak limiter** at −1 dBTP. It iterates to land on target.
+2. **Subtractive-first clarity EQ** — cuts the 200–500 Hz mud/boxiness zone
+   before any boosts; content matching is capped gently so the track is not
+   remoulded into a different genre.
+3. **Mixea-style Intensity** — Low / Medium / High scales compression amount
+   (and backs off further if the source is already squashed).
+4. **Stem-aware dynamics** — a light 4-band compressor treats **bass**,
+   **low-mid (drum body)**, **mids (vocals/instrumental)** and **highs**
+   separately, with soft makeup so bands don’t stack into haze.
+5. **Dolby-inspired Mid/Side** — vocal presence on the mid channel; sides get
+   a steep high-pass + mud cut so **bass stays mono** and width stays clean.
+6. **Light glue + soft saturation**, then **loudness normalization** to the
+   target LUFS and a **look-ahead true-peak limiter** at −1 dBTP.
 
 Output is re-encoded to the **same container** as the input:
 WAV (16/24-bit or 32-bit float), MP3 (via LAME), or FLAC (via libFLAC).

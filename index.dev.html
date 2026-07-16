@@ -46,10 +46,10 @@
           Your track,<br /><span>mastered for the world.</span>
         </h1>
         <p class="hero__sub">
-          Upload a <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. Our engine analyzes your
-          bass, drums, vocals and instrumental balance, sculpts the frequencies to
-          your genre, and delivers a streaming-ready master at
-          <b>&minus;14&nbsp;LUFS</b> — returned in the exact format you gave us.
+          Upload a <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. Clarity-first mastering
+          inspired by Mixea-style Intensity/EQ and Dolby loudness discipline —
+          mud cleanup, mono bass, gentle dynamics — then a streaming-ready master at
+          <b>&minus;14&nbsp;LUFS</b> in the exact format you uploaded.
         </p>
         <div class="hero__cta">
           <a class="btn btn--primary" href="#dropCard">Load your record</a>
@@ -100,18 +100,18 @@
             </select>
           </div>
           <div class="ctl">
-            <label class="ctl__label" for="dynamics">Dynamics profile</label>
+            <label class="ctl__label" for="dynamics">Intensity <span class="ctl__hint">(Mixea-style)</span></label>
             <select class="select" id="dynamics">
-              <option value="open">Open &amp; dynamic</option>
-              <option value="balanced" selected>Balanced</option>
-              <option value="punchy">Loud &amp; punchy</option>
+              <option value="open">Low — soft touch, more dynamics</option>
+              <option value="balanced" selected>Medium — balanced polish</option>
+              <option value="punchy">High — louder, more compression</option>
             </select>
           </div>
         </div>
 
         <div class="sliders">
           <div class="slider">
-            <label>Warmth <output id="warmthOut">0</output></label>
+            <label>Warmth <span class="ctl__hint">← warmer · brighter →</span> <output id="warmthOut">0</output></label>
             <input type="range" id="warmth" min="-6" max="6" step="0.5" value="0" />
           </div>
           <div class="slider">

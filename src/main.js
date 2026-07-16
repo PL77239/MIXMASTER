@@ -216,26 +216,29 @@ function renderMeters(before, after, target) {
 
 function renderNotes(result) {
   const { before, after, corrective, gainDb, genre, settings } = result;
+  const intensityLabel = {
+    open: 'Low', balanced: 'Medium', punchy: 'High',
+  }[settings.dynamicsProfile] || settings.dynamicsProfile;
   const moves = corrective.length
     ? corrective.map((m) => `<li><b>${m.band}</b> (${Math.round(m.freq)} Hz):
         ${m.gain > 0 ? '+' : ''}${m.gain.toFixed(1)} dB</li>`).join('')
-    : '<li>Spectrum already close to the target signature — only gentle shaping applied.</li>';
+    : '<li>Spectrum already close — only gentle haze cleanup applied.</li>';
 
   $('analysisNotes').innerHTML = `
-    <h4>Content-aware EQ moves</h4>
+    <h4>Clarity EQ moves <span style="font-weight:400;text-transform:none;letter-spacing:0">(subtractive-first)</span></h4>
     <ul>${moves}</ul>
     <h4>Mastering chain</h4>
     <ul>
-      <li>Genre standard: <b>${genre.label}</b> · dynamics profile
-        <b>${settings.dynamicsProfile}</b></li>
-      <li>4-band dynamics on <b>bass / low-mid / mid / highs</b>,
-        crossovers at ${genre.dynamics.crossovers.join(' / ')} Hz</li>
-      <li>Mid channel vocal presence + de-ess, side-channel widening
-        (${settings.width}% width, bass kept mono)</li>
-      <li>Bus glue compression + ${Math.round(genre.dynamics.saturation * 100)}%
-        analog-style saturation</li>
-      <li>Normalized by <b>${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB</b>
-        to <b>${settings.targetLufs} LUFS</b>, limited to &minus;1 dBTP</li>
+      <li>Genre: <b>${genre.label}</b> · Mixea-style Intensity
+        <b>${intensityLabel}</b></li>
+      <li>Mud / masking cleanup in <b>200–500 Hz</b>, then light genre tone</li>
+      <li>4-band dynamics on <b>bass / low-mid / mid / highs</b>
+        (crossovers ${genre.dynamics.crossovers.join(' / ')} Hz), soft makeup</li>
+      <li>Dolby-inspired M/S: <b>mono bass</b>, side mud cut, controlled width
+        (${settings.width}%)</li>
+      <li>Light bus glue + soft saturation · normalized
+        <b>${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB</b>
+        → <b>${settings.targetLufs} LUFS</b> · ceiling <b>&minus;1 dBTP</b></li>
     </ul>`;
 }
 

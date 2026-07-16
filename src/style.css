@@ -336,6 +336,13 @@ body {
   color: var(--ink-faint);
   margin-bottom: 10px;
 }
+.ctl__hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+  opacity: 0.85;
+}
 .ctl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .genre-grid {
   display: grid;
