@@ -36,8 +36,10 @@ export async function encodeFlac(channels, sampleRate, bitDepth = 16, onProgress
   const bps = bitDepth === 24 ? 24 : 16;
   const numCh = channels.length;
   const compression = 6;
+  const totalSamples = channels[0].length;
 
-  const encoder = Flac.create_libflac_encoder(sampleRate, numCh, bps, compression, 0, false);
+  const encoder = Flac.create_libflac_encoder(
+    sampleRate, numCh, bps, compression, totalSamples, false);
   if (encoder === 0) throw new Error('Failed to create FLAC encoder');
 
   const output = [];
@@ -54,7 +56,6 @@ export async function encodeFlac(channels, sampleRate, bitDepth = 16, onProgress
   }
 
   const interleaved = floatToInt32(channels, bps);
-  const totalSamples = channels[0].length;
   const chunk = 32768; // samples per channel per process call
 
   for (let start = 0; start < totalSamples; start += chunk) {
