@@ -14,8 +14,8 @@
       href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-Bp0Kglw5.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CWu3vt-z.css">
+    <script type="module" crossorigin src="./assets/index-C5FRCqw4.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BJM5AV4H.css">
   </head>
   <body>
     <div class="sky"></div>
@@ -47,10 +47,10 @@
           Your track,<br /><span>mastered for the world.</span>
         </h1>
         <p class="hero__sub">
-          Upload a <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. Pick a genre and the
-          desk listens like that engineer — diagnosing kick/bass fights, vocal
-          pockets, mud and width — then mixes with genre playbooks (not blind
-          EQ matching). Delivery at <b>&minus;14&nbsp;LUFS</b> in your format.
+          Upload a <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. The desk detects instruments,
+          diagnoses mud / peaks / kick–bass fights, then <b>polishes</b> — not remoulds —
+          with genre playbooks. Drop similar tracks to match. Check translation in
+          <b>Studio</b> or <b>Car</b>. Delivery near <b>&minus;14&nbsp;LUFS</b> in your format.
         </p>
         <div class="hero__cta">
           <a class="btn btn--primary" href="#dropCard">Load your record</a>
@@ -101,12 +101,32 @@
             </select>
           </div>
           <div class="ctl">
-            <label class="ctl__label" for="dynamics">Intensity <span class="ctl__hint">(Mixea-style)</span></label>
+            <label class="ctl__label" for="dynamics">Intensity <span class="ctl__hint">(polish amount)</span></label>
             <select class="select" id="dynamics">
               <option value="open">Low — soft touch, more dynamics</option>
-              <option value="balanced" selected>Medium — balanced polish</option>
+              <option value="balanced" selected>Medium — light polish (no crush)</option>
               <option value="punchy">High — louder, more compression</option>
             </select>
+          </div>
+        </div>
+
+        <div class="ctl-row">
+          <div class="ctl">
+            <label class="ctl__label">Room mix <span class="ctl__hint">(translation)</span></label>
+            <div class="room-toggle" id="roomToggle" role="group" aria-label="Room simulation">
+              <button type="button" class="room-btn is-active" data-room="studio">Studio</button>
+              <button type="button" class="room-btn" data-room="car">Car</button>
+            </div>
+            <p class="ctl__hint" id="roomHint">Neutral nearfield — trusted mix room</p>
+          </div>
+          <div class="ctl">
+            <label class="ctl__label" for="refInput">Match similar tracks <span class="ctl__hint">(optional)</span></label>
+            <div class="ref-box">
+              <input type="file" id="refInput" accept=".wav,.flac,.mp3,audio/wav,audio/flac,audio/mpeg" multiple hidden />
+              <button class="btn btn--ghost btn--sm" type="button" id="refBrowseBtn">Add reference(s)</button>
+              <button class="btn btn--ghost btn--sm hidden" type="button" id="refClearBtn">Clear</button>
+            </div>
+            <p class="ctl__hint" id="refHint">Analyzed first, then your track is pulled toward them.</p>
           </div>
         </div>
 
@@ -155,6 +175,11 @@
           <div class="ab__toggle" role="tablist">
             <button class="ab__btn is-active" id="abOriginal" role="tab">Original</button>
             <button class="ab__btn" id="abMastered" role="tab">Mastered</button>
+          </div>
+          <div class="listen-room" id="listenRoom" role="group" aria-label="Listen room">
+            <span class="listen-room__label">Listen in</span>
+            <button type="button" class="room-btn is-active" data-listen="studio">Studio</button>
+            <button type="button" class="room-btn" data-listen="car">Car</button>
           </div>
           <div class="transport">
             <button class="btn btn--round" id="playBtn" aria-label="Play / pause">▶</button>

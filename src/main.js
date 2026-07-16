@@ -3,6 +3,7 @@ import { GENRES, DEFAULT_GENRE } from './audio/genres.js';
 import { decodeFile } from './audio/decode.js';
 import { analyzeBuffer } from './audio/analyze.js';
 import { masterTrack } from './audio/engine.js';
+import { getRoom } from './audio/rooms.js';
 import { encodeBuffer, EXTENSIONS } from './encode/index.js';
 import { drawWaveform, drawSpectrum } from './ui/visualizer.js';
 import { ABPlayer } from './ui/player.js';
@@ -15,6 +16,9 @@ const state = {
   result: null,
   outputBlob: null,
   genre: DEFAULT_GENRE,
+  room: 'studio',
+  listenRoom: 'studio',
+  references: [], // { name, audioBuffer }
   busy: false,
 };
 
@@ -69,6 +73,76 @@ function bindSliders() {
     el.addEventListener('input', update);
     update();
   }
+}
+
+// ---------- room (process + listen) ----------
+function bindRooms() {
+  const toggle = $('roomToggle');
+  toggle.querySelectorAll('.room-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.room = btn.dataset.room;
+      toggle.querySelectorAll('.room-btn').forEach((b) =>
+        b.classList.toggle('is-active', b === btn));
+      const room = getRoom(state.room);
+      $('roomHint').textContent = room.desc;
+    });
+  });
+
+  const listen = $('listenRoom');
+  if (listen) {
+    listen.querySelectorAll('.room-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.listenRoom = btn.dataset.listen;
+        listen.querySelectorAll('.room-btn').forEach((b) =>
+          b.classList.toggle('is-active', b === btn));
+        player.setRoom(state.listenRoom);
+      });
+    });
+  }
+}
+
+// ---------- references ----------
+function updateRefHint() {
+  const n = state.references.length;
+  $('refClearBtn').classList.toggle('hidden', n === 0);
+  if (!n) {
+    $('refHint').textContent = 'Analyzed first, then your track is pulled toward them.';
+    return;
+  }
+  $('refHint').textContent =
+    `${n} reference${n > 1 ? 's' : ''}: ${state.references.map((r) => r.name).join(', ')}`;
+}
+
+async function handleRefs(fileList) {
+  const files = [...fileList].filter((f) => /\.(wav|flac|mp3)$/i.test(f.name));
+  if (!files.length) {
+    toast('References must be WAV, FLAC or MP3.', true);
+    return;
+  }
+  try {
+    for (const file of files.slice(0, 4)) {
+      const decoded = await decodeFile(file);
+      state.references.push({ name: file.name, audioBuffer: decoded.audioBuffer });
+    }
+    updateRefHint();
+    toast(`Loaded ${files.length} reference track(s) — will analyze before matching.`);
+  } catch (err) {
+    console.error(err);
+    toast('Could not decode a reference file.', true);
+  }
+}
+
+function bindRefs() {
+  const input = $('refInput');
+  $('refBrowseBtn').addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    if (input.files?.length) handleRefs(input.files);
+    input.value = '';
+  });
+  $('refClearBtn').addEventListener('click', () => {
+    state.references = [];
+    updateRefHint();
+  });
 }
 
 // ---------- file handling ----------
@@ -149,6 +223,7 @@ function bindDropzone() {
 function gatherSettings() {
   return {
     genre: state.genre,
+    room: state.room,
     targetLufs: parseFloat($('targetLufs').value),
     dynamicsProfile: $('dynamics').value,
     warmth: parseFloat($('warmth').value),
@@ -156,6 +231,8 @@ function gatherSettings() {
     bass: parseFloat($('bass').value),
     vocal: parseFloat($('vocal').value),
     width: parseFloat($('width').value),
+    referenceBuffers: state.references.map((r) => r.audioBuffer),
+    referenceNames: state.references.map((r) => r.name),
   };
 }
 
@@ -204,7 +281,7 @@ function renderMeters(before, after, target) {
     meterCard('Integrated loudness', d(after.lufs), ' LUFS',
       lufsDelta + (onTarget ? '<div class="meter__delta up">✓ on target</div>' : '')),
     meterCard('True peak', d(after.truePeakDb), ' dBTP',
-      `<div class="meter__delta ${after.truePeakDb <= -0.9 ? 'up' : 'down'}">ceiling &minus;1.0</div>`),
+      `<div class="meter__delta ${after.truePeakDb <= -0.9 ? 'up' : 'down'}">ceiling polish</div>`),
     meterCard('Dynamics (crest)', d(after.crest), ' dB',
       `<div class="meter__delta">was ${d(before.crest)} dB</div>`),
     meterCard('Stereo width', widthPct, ' %',
@@ -217,7 +294,7 @@ function renderMeters(before, after, target) {
 function renderNotes(result) {
   const {
     corrective, gainDb, genre, settings, regionsBefore, regionsAfter,
-    engineerLog, plan,
+    engineerLog, plan, diag,
   } = result;
   const intensityLabel = {
     open: 'Low', balanced: 'Medium', punchy: 'High',
@@ -226,6 +303,7 @@ function renderNotes(result) {
   const logHtml = (engineerLog || [])
     .map((l) => {
       if (l.type === 'role') return `<li><b>${l.text}</b></li>`;
+      if (l.type === 'room') return `<li>🏠 ${l.text}</li>`;
       if (l.type === 'finding') return `<li style="opacity:.95">🔍 ${l.text}</li>`;
       if (l.type === 'decision') return `<li>→ ${l.text}</li>`;
       return `<li>${l.text}</li>`;
@@ -242,14 +320,27 @@ function renderNotes(result) {
     : '—';
 
   const kb = plan?.kickBass
-    ? `<li>Kick/bass sep: duck ${plan.kickBass.duckDb.toFixed(1)} dB @ ${plan.kickBass.bandHz} Hz</li>`
+    ? `<li>Kick/bass space: duck ${plan.kickBass.duckDb.toFixed(1)} dB @ ${plan.kickBass.bandHz} Hz</li>`
     : '<li>Kick/bass: left alone</li>';
+
+  const peak = plan?.peak
+    ? `<li>Peak chain: ${plan.peak.softClip ? 'soft clip → ' : ''}limit @ ${plan.peak.ceilingDb} dBTP</li>`
+    : '';
+
+  const instruments = diag?.instruments?.detected?.length
+    ? `<li>Detected: ${diag.instruments.detected.join(', ')}</li>`
+    : '';
+
+  const roomLabel = plan?.room?.label || settings.room || 'Studio';
+  const refLine = plan?.refProfile
+    ? `<li>Matched toward: <b>${plan.refProfile.name}</b> (${plan.refProfile.lufs.toFixed(1)} LUFS)</li>`
+    : '<li>No reference tracks — genre polish only</li>';
 
   $('analysisNotes').innerHTML = `
     <h4>Engineer session</h4>
     <ul>${logHtml}</ul>
     <h4>Moves applied</h4>
-    <ul>${moves}${kb}</ul>
+    <ul>${instruments}${moves}${kb}${peak}</ul>
     <h4>Spectral check</h4>
     <ul>
       <li>Before: ${fmtR(regionsBefore)}</li>
@@ -257,9 +348,10 @@ function renderNotes(result) {
     </ul>
     <h4>Delivery</h4>
     <ul>
-      <li>Genre desk: <b>${genre.label}</b> · Intensity <b>${intensityLabel}</b></li>
+      <li>Genre desk: <b>${genre.label}</b> · Intensity <b>${intensityLabel}</b> · Room <b>${roomLabel}</b></li>
+      ${refLine}
       <li>Normalized <b>${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB</b>
-        → <b>${settings.targetLufs} LUFS</b> · ceiling <b>&minus;1 dBTP</b></li>
+        → <b>${settings.targetLufs} LUFS</b></li>
     </ul>`;
 }
 
@@ -270,6 +362,7 @@ function showResults(result) {
   $('abOriginal').classList.add('is-active');
   $('abMastered').classList.remove('is-active');
   player.setBuffers(state.decoded.audioBuffer, result.buffer);
+  player.setRoom(state.listenRoom);
   player.switchTo('original');
   $('playBtn').textContent = '▶';
 
@@ -278,7 +371,6 @@ function showResults(result) {
   renderMeters(result.before, result.after, result.settings.targetLufs);
   renderNotes(result);
 
-  const ext = EXTENSIONS[state.decoded.format];
   const sizeKB = (state.outputBlob.size / 1024).toFixed(0);
   $('downloadNote').textContent =
     `Ready as ${state.decoded.format.toUpperCase()} · ${sizeKB} KB · ` +
@@ -378,6 +470,8 @@ window.addEventListener('resize', () => {
 // ---------- init ----------
 buildGenreGrid();
 bindSliders();
+bindRooms();
+bindRefs();
 bindDropzone();
 bindResultControls();
 $('processBtn').addEventListener('click', runProcess);

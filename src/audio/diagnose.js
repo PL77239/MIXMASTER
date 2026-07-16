@@ -1,7 +1,10 @@
 // Genre-aware diagnostics — what an engineer would notice on first listen.
+// Augmented with instrument-family detection (iZotope Neutron-style group thinking)
+// and peak / over-compression flags (Aurora: treat peaks & limits, not only EQ).
 import { FFT, hann } from './fft.js';
 import { measureRegions } from './analyzeTargets.js';
 import { getPlaybook } from './playbooks.js';
+import { detectInstruments } from './instruments.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
@@ -118,8 +121,35 @@ export function diagnose(channels, sampleRate, analysis, genreKey) {
   const stereo = stereoMetrics(channels);
   const presence = presenceShare(mono, sampleRate);
   const kb = kickBassConflict(mono, sampleRate);
+  const instruments = detectInstruments(channels, sampleRate);
 
   const findings = [];
+
+  // --- Instrument roles (first listen) ---
+  findings.push({
+    id: 'instruments',
+    severity: 0.15,
+    note: instruments.notes.join(' '),
+    action: 'note_instruments',
+    instruments,
+  });
+
+  // --- Peaks / limits (Aurora: clip then limit) ---
+  if (isFinite(analysis.truePeakDb) && analysis.truePeakDb > -0.1) {
+    findings.push({
+      id: 'clipping',
+      severity: 0.85,
+      note: `True peak ${analysis.truePeakDb.toFixed(1)} dBTP — overs present. Soft-clip then limit (Aurora peak chain).`,
+      action: 'peak_clip_limit',
+    });
+  } else if (isFinite(analysis.truePeakDb) && analysis.truePeakDb > -1.5) {
+    findings.push({
+      id: 'hot_peaks',
+      severity: 0.45,
+      note: `True peak ${analysis.truePeakDb.toFixed(1)} dBTP — polish limiter to ceiling.`,
+      action: 'peak_limit',
+    });
+  }
 
   // --- Spectrum vs genre engineer targets ---
   if (regions.sub > pb.checks.maxSub) {
@@ -188,12 +218,33 @@ export function diagnose(channels, sampleRate, analysis, genreKey) {
   }
 
   // --- Kick / bass ---
-  if (pb.techniques.kickBassSep?.enabled && kb.conflict) {
+  const kickBassFight =
+    (pb.techniques.kickBassSep?.enabled && kb.conflict) ||
+    (instruments.instruments.kick.present &&
+      instruments.instruments.bass.present &&
+      instruments.relationship === 'kick-above-bass' &&
+      kb.ratio > 0.45);
+  if (kickBassFight) {
     findings.push({
       id: 'kick_bass',
-      severity: kb.severity,
-      note: `Kick and bass are fighting in the sub (sustain/transient ratio ${kb.ratio.toFixed(2)}). Applying genre-typical separation so the kick punches through.`,
+      severity: Math.max(kb.severity, 0.55),
+      note: `Kick and bass are fighting in the sub (ratio ${kb.ratio.toFixed(2)}, ${instruments.relationship}). Give each its pocket (iZotope / Aurora).`,
       action: 'kick_bass_sep',
+    });
+  }
+
+  // Vocal present but masked → reinforce presence action
+  if (
+    instruments.instruments.vocals.present &&
+    instruments.instruments.vocals.strength > 0.45 &&
+    presence < pb.checks.minPresence * 1.15 &&
+    !findings.some((f) => f.action === 'boost_presence')
+  ) {
+    findings.push({
+      id: 'vocal_mask',
+      severity: 0.5,
+      note: 'Vocals / lead detected but presence pocket is soft — gentle 2–5 kHz polish so the vocal sits forward.',
+      action: 'boost_presence',
     });
   }
 
@@ -222,8 +273,9 @@ export function diagnose(channels, sampleRate, analysis, genreKey) {
     });
   }
 
-  // Always at least one "session intent" finding
-  if (!findings.length) {
+  // Always at least one "session intent" finding (ignore info-only instrument note)
+  const actionable = findings.filter((f) => f.action !== 'note_instruments');
+  if (!actionable.length) {
     findings.push({
       id: 'polish',
       severity: 0.3,
@@ -240,6 +292,7 @@ export function diagnose(channels, sampleRate, analysis, genreKey) {
     stereo,
     presence,
     kickBass: kb,
+    instruments,
     findings,
   };
 }

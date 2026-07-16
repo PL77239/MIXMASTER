@@ -1,11 +1,15 @@
-// Execute an engineer session plan: diagnose → plan → process like a genre specialist.
+/**
+ * Execute an engineer session plan: diagnose → plan → polish.
+ * Peak chain: optional soft clip → true-peak limit (Aurora).
+ * Spectral refine is residual polish only — never a remould.
+ */
 import { GENRES } from './genres.js';
 import { analyzeBuffer } from './analyze.js';
 import { measureLoudness } from './lufs.js';
 import { measureRegions } from './analyzeTargets.js';
 import { diagnose } from './diagnose.js';
 import { planSession } from './planner.js';
-import { limit, applyGainDb } from './limiter.js';
+import { peakPolish } from './peakPolish.js';
 import {
   renderGraph, chain, peaking, lowShelf, highShelf, highpass, lowpass,
   gainNode, saturationCurve, compressor, makeBuffer, getChannelArrays, dbToLin,
@@ -30,9 +34,8 @@ function applyEqPlan(inputBuffer, eqMoves) {
 }
 
 /**
- * Kick/bass separation without stems (house/trap engineer technique):
- * Split low band into transient vs sustain via envelope follower.
- * Duck the sustain briefly when a transient hits — approximates multiband sidechain.
+ * Kick/bass separation without stems:
+ * Duck low-band sustain when a transient hits — approximates multiband sidechain.
  */
 async function kickBassSeparate(inputBuffer, spec) {
   if (!spec) return inputBuffer;
@@ -41,7 +44,6 @@ async function kickBassSeparate(inputBuffer, spec) {
   const n = channels[0].length;
   const nCh = channels.length;
 
-  // Isolate low band
   const lowBuf = await renderGraph(inputBuffer, (ctx, source) =>
     chain([source, lowpass(ctx, spec.bandHz * 1.4), lowpass(ctx, spec.bandHz * 1.4)]));
   const highBuf = await renderGraph(inputBuffer, (ctx, source) =>
@@ -50,7 +52,6 @@ async function kickBassSeparate(inputBuffer, spec) {
   const low = [];
   for (let c = 0; c < nCh; c++) low.push(lowBuf.getChannelData(c));
 
-  // Envelope on mono low
   const atk = Math.exp(-1 / Math.max(1, (spec.attackMs / 1000) * fs));
   const rel = Math.exp(-1 / Math.max(1, (spec.releaseMs / 1000) * fs));
   let env = 0;
@@ -61,8 +62,6 @@ async function kickBassSeparate(inputBuffer, spec) {
     for (let c = 0; c < nCh; c++) x += Math.abs(low[c][i]);
     x /= nCh;
     env = x > env ? atk * env + (1 - atk) * x : rel * env + (1 - rel) * x;
-    // When envelope rises fast, duck sustain more — use env itself as sidechain key
-    // Soft-knee: map env to gain between 1 and duckLin
     const key = clamp(env * 8, 0, 1);
     gainEnv[i] = 1 - key * (1 - duckLin);
   }
@@ -99,7 +98,6 @@ async function midSideShape(inputBuffer, plan) {
     S[i] = 0.5 * (L[i] - R[i]);
   }
 
-  // Measure current width to scale sides
   let midE = 0, sideE = 0;
   for (let i = 0; i < n; i += 2) {
     midE += M[i] * M[i];
@@ -109,10 +107,10 @@ async function midSideShape(inputBuffer, plan) {
   const tgt = plan.widthTarget;
   const curRatio = curW > 1e-6 ? curW / (1 - curW) : 0.03;
   const tgtRatio = tgt / (1 - tgt);
-  const sideScale = clamp(tgtRatio / Math.max(curRatio, 1e-4), 0.65, 1.9);
+  const sideScale = clamp(tgtRatio / Math.max(curRatio, 1e-4), 0.7, 1.6);
 
   const midOut = await renderGraph(makeBuffer([M], fs), (ctx, source) =>
-    chain([source, peaking(ctx, 1000, 0.25, 0.9)]));
+    chain([source, peaking(ctx, 1000, 0.15, 0.9)]));
 
   const sideNodes = (ctx, source) => {
     const nodes = [source, highpass(ctx, plan.monoBassHz), highpass(ctx, plan.monoBassHz)];
@@ -134,12 +132,18 @@ async function midSideShape(inputBuffer, plan) {
 }
 
 function gluePass(inputBuffer, plan) {
+  // Near-bypass when glue/sat are essentially off (protect / open)
+  const ratio = plan.glue?.ratio || 1;
+  const sat = plan.sat || 0;
+  if (ratio < 1.08 && sat < 0.02) {
+    return inputBuffer;
+  }
   return renderGraph(inputBuffer, (ctx, source) => {
-    const glue = compressor(ctx, { ...plan.glue, knee: 10 });
+    const glue = compressor(ctx, { ...plan.glue, knee: 12 });
     const shaper = ctx.createWaveShaper();
-    shaper.curve = saturationCurve(plan.sat);
+    shaper.curve = saturationCurve(sat);
     shaper.oversample = '2x';
-    const makeup = plan.protectDynamics ? 0.3 : 0.7;
+    const makeup = plan.protectDynamics ? 0.15 : 0.35;
     return chain([source, glue, shaper, gainNode(ctx, dbToLin(makeup))]);
   });
 }
@@ -149,57 +153,71 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   const report = (p, t) => onProgress && onProgress(p, t);
   const channels = getChannelArrays(inputBuffer);
 
-  report(0.05, `Listening as ${settings.genre} engineer…`);
+  report(0.04, `Listening as ${settings.genre} engineer… detecting instruments…`);
   const diag = diagnose(channels, inputBuffer.sampleRate, analysis, settings.genre);
   await yieldFrame();
 
-  report(0.12, 'Building the session plan from genre playbook…');
-  const plan = planSession(diag, settings);
+  // Pass peak info + refs/room into planner
+  const planSettings = {
+    ...settings,
+    _truePeakDb: analysis.truePeakDb,
+  };
+
+  report(0.1, 'Building polish plan (peaks, instruments, references)…');
+  const plan = planSession(diag, planSettings);
   await yieldFrame();
 
-  report(0.22, plan.log.find((l) => l.type === 'finding')?.text || 'Applying genre EQ recipe…');
+  report(0.2, plan.log.find((l) => l.type === 'finding')?.text || 'Applying polish EQ…');
   let buf = await applyEqPlan(inputBuffer, plan.eq);
   await yieldFrame();
 
   if (plan.kickBass) {
-    report(0.4, 'Kick/bass separation (genre sidechain technique)…');
+    report(0.38, 'Kick/bass space (gentle sidechain-style duck)…');
     buf = await kickBassSeparate(buf, plan.kickBass);
     await yieldFrame();
   } else {
-    report(0.4, 'Lows OK — skipping kick/bass separation…');
+    report(0.38, 'Lows OK — skipping kick/bass separation…');
     await yieldFrame();
   }
 
-  report(0.55, 'Mid/Side — mono bass, genre width & side air…');
+  report(0.52, 'Mid/Side — mono bass, width polish…');
   buf = await midSideShape(buf, plan);
   await yieldFrame();
 
-  report(0.7, 'Bus glue & colour…');
+  report(0.64, plan.protectDynamics
+    ? 'Dynamics protect — skipping heavy glue…'
+    : 'Light bus glue (tap, don’t slam)…');
   buf = await gluePass(buf, plan);
   await yieldFrame();
 
-  // Closing pass: gently close remaining gap to the genre spectrum target
-  // (Matchering-style idea — match FR to a reference curve — but only residual).
-  report(0.78, 'Closing genre spectral target (Matchering-style refine)…');
+  // Residual FR refine only (polish) — capped soft
+  report(0.74, plan.refProfile
+    ? 'Closing toward analyzed reference spectrum…'
+    : 'Light spectral polish (not a remould)…');
   const midRegions = measureRegions(getChannelArrays(buf), buf.sampleRate);
   const refine = [];
   const tgt = plan.spectrumTarget;
+  const refineMul = plan.refineMul ?? 0.18;
   const specs = [
-    { key: 'sub', freq: 40, type: 'lowshelf', max: 2.5 },
-    { key: 'bass', freq: 110, type: 'lowshelf', max: 2.0 },
-    { key: 'lowMid', freq: 350, type: 'peak', max: 2.5 },
-    { key: 'mid', freq: 1100, type: 'peak', max: 3.0 },
-    { key: 'high', freq: 4500, type: 'peak', max: 2.5 },
-    { key: 'air', freq: 11000, type: 'highshelf', max: 3.0 },
+    { key: 'sub', freq: 40, type: 'lowshelf', max: 1.4 },
+    { key: 'bass', freq: 110, type: 'lowshelf', max: 1.2 },
+    { key: 'lowMid', freq: 350, type: 'peak', max: 1.4 },
+    { key: 'mid', freq: 1100, type: 'peak', max: 1.5 },
+    { key: 'high', freq: 4500, type: 'peak', max: 1.4 },
+    { key: 'air', freq: 11000, type: 'highshelf', max: 1.5 },
   ];
   for (const s of specs) {
     const cur = Math.max(midRegions[s.key], 1e-6);
-    let g = 20 * Math.log10(tgt[s.key] / cur) * 0.4;
+    let g = 20 * Math.log10(tgt[s.key] / cur) * refineMul;
     g = clamp(g, -s.max, s.max);
-    if (Math.abs(g) < 0.4) continue;
+    if (Math.abs(g) < 0.35) continue;
     refine.push({
-      type: s.type, freq: s.freq, gain: g, q: 0.9,
-      label: `Refine ${s.key}`, reason: `Close to genre target (${(cur * 100).toFixed(0)}% → ${(tgt[s.key] * 100).toFixed(0)}%)`,
+      type: s.type,
+      freq: s.freq,
+      gain: g,
+      q: 0.9,
+      label: `Polish ${s.key}`,
+      reason: `Close to target (${(cur * 100).toFixed(0)}% → ${(tgt[s.key] * 100).toFixed(0)}%)`,
     });
   }
   if (refine.length) {
@@ -208,20 +226,37 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   }
   await yieldFrame();
 
-  report(0.86, 'ITU-R BS.1770 loudness → target, −1 dBTP…');
+  const peak = plan.peak || {
+    softClip: false,
+    softClipDb: -0.5,
+    ceilingDb: -1.0,
+    targetLufs: settings.targetLufs,
+  };
+
+  report(
+    0.84,
+    peak.softClip
+      ? `Peak polish: soft clip → limit @ ${peak.ceilingDb} dBTP…`
+      : `Loudness → ${peak.targetLufs.toFixed(1)} LUFS · limit @ ${peak.ceilingDb} dBTP…`
+  );
+
   const fs = buf.sampleRate;
   const base = getChannelArrays(buf);
   const baseLufs = measureLoudness(base.map((c) => c), fs).integrated;
-  let gainDb = clamp(settings.targetLufs - baseLufs, -16, 16);
+  let gainDb = clamp(peak.targetLufs - baseLufs, -14, 14);
   let limited = base;
   for (let iter = 0; iter < 3; iter++) {
-    const work = base.map((c) => c.slice());
-    applyGainDb(work, gainDb);
-    limited = limit(work, fs, -1.0, 100);
+    limited = peakPolish(base, fs, {
+      gainDb,
+      softClip: peak.softClip,
+      softClipDb: peak.softClipDb,
+      ceilingDb: peak.ceilingDb,
+      releaseMs: plan.protectDynamics ? 140 : 100,
+    });
     const achieved = measureLoudness(limited.map((c) => c), fs).integrated;
-    const err = settings.targetLufs - achieved;
-    if (Math.abs(err) < 0.25) break;
-    gainDb = clamp(gainDb + err * 0.85, -16, 16);
+    const err = peak.targetLufs - achieved;
+    if (Math.abs(err) < 0.3) break;
+    gainDb = clamp(gainDb + err * 0.8, -14, 14);
     await yieldFrame();
   }
 
@@ -250,7 +285,7 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
     regionsAfter,
     gainDb,
     genre,
-    settings,
+    settings: { ...settings, targetLufs: peak.targetLufs },
     intensity: settings.dynamicsProfile,
     engineerLog: plan.log,
   };

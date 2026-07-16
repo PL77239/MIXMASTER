@@ -110,8 +110,9 @@ export const PLAYBOOKS = {
       airSide: { f: 11000, g: 1.5 },
       vocalPresence: { f: 3000, g: 0.6, q: 1.0 },
       deEss: { f: 8000, g: -0.8 },
-      glue: { threshold: -20, ratio: 1.5, attack: 0.03, release: 0.16 },
-      sat: 0.1,
+      // Soft bus — Medium intensity must not crush EDM
+      glue: { threshold: -22, ratio: 1.35, attack: 0.035, release: 0.18 },
+      sat: 0.06,
       monoBassHz: 140,
     },
   },

@@ -344,6 +344,49 @@ body {
   opacity: 0.85;
 }
 .ctl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.room-toggle, .listen-room {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.room-btn {
+  appearance: none;
+  border: 1px solid var(--glass-brd);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-dim);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.room-btn:hover { border-color: rgba(255, 210, 90, 0.45); color: var(--ink); }
+.room-btn.is-active {
+  border-color: var(--gold);
+  color: var(--ink);
+  background: linear-gradient(140deg, rgba(255, 45, 149, 0.2), rgba(255, 138, 61, 0.12));
+}
+.listen-room {
+  margin: 12px 0 4px;
+}
+.listen-room__label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ink-faint);
+  margin-right: 4px;
+}
+.ref-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .genre-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

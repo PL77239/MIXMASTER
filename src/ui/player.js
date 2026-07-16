@@ -1,16 +1,21 @@
 // Small A/B audio player driven by two AudioBuffers sharing one timeline.
+// Optional room listen EQ (studio / car) for translation audition.
+import { getRoom } from '../audio/rooms.js';
+
 export class ABPlayer {
   constructor({ onTime, onEnd }) {
     this.ctx = null;
     this.buffers = { original: null, mastered: null };
     this.which = 'original';
     this.source = null;
+    this.roomNode = null;
     this.startedAt = 0;
     this.offset = 0;
     this.playing = false;
     this.onTime = onTime;
     this.onEnd = onEnd;
     this._raf = null;
+    this.roomId = 'studio';
   }
 
   _ensureCtx() {
@@ -24,6 +29,11 @@ export class ABPlayer {
     this.offset = 0;
   }
 
+  setRoom(roomId) {
+    this.roomId = roomId || 'studio';
+    if (this.playing) this.play();
+  }
+
   get duration() {
     const b = this.buffers[this.which];
     return b ? b.duration : 0;
@@ -34,6 +44,38 @@ export class ABPlayer {
       try { this.source.onended = null; this.source.stop(); } catch (e) { /* noop */ }
       this.source = null;
     }
+    this.roomNode = null;
+  }
+
+  _buildRoomChain(source) {
+    const room = getRoom(this.roomId);
+    const filters = room.listenEq || [];
+    if (!filters.length) {
+      source.connect(this.ctx.destination);
+      return;
+    }
+    let prev = source;
+    for (const f of filters) {
+      const b = this.ctx.createBiquadFilter();
+      if (f.type === 'lowshelf') {
+        b.type = 'lowshelf';
+        b.frequency.value = f.freq;
+        b.gain.value = f.gain;
+      } else if (f.type === 'highshelf') {
+        b.type = 'highshelf';
+        b.frequency.value = f.freq;
+        b.gain.value = f.gain;
+      } else {
+        b.type = 'peaking';
+        b.frequency.value = f.freq;
+        b.Q.value = f.q || 1;
+        b.gain.value = f.gain;
+      }
+      prev.connect(b);
+      prev = b;
+    }
+    prev.connect(this.ctx.destination);
+    this.roomNode = prev;
   }
 
   _tick = () => {
@@ -57,7 +99,7 @@ export class ABPlayer {
     this._stopSource();
     this.source = this.ctx.createBufferSource();
     this.source.buffer = buffer;
-    this.source.connect(this.ctx.destination);
+    this._buildRoomChain(this.source);
     this.source.start(0, Math.min(this.offset, buffer.duration - 0.01));
     this.startedAt = this.ctx.currentTime;
     this.playing = true;
