@@ -585,5 +585,6 @@ bindResultControls();
 bindBrandHome();
 initCursor();
 initTidewave();
+void import('./ui/logo3d.js').then((m) => m.initLogo3d());
 initReveals();
 $('processBtn').addEventListener('click', runProcess);

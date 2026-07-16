@@ -14,8 +14,8 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-ZmRgR0mt.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DMpVaOTI.css">
+    <script type="module" crossorigin src="./assets/index-DHTjLMeO.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-B2pgPv93.css">
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -85,6 +85,12 @@
         </nav>
       </header>
 
+      <!-- 3D rotational logo (pxpush-style extruded metal mark) -->
+      <div class="logo3d logo3d--hero" id="logo3d" aria-hidden="true" title="Back to top">
+        <div class="logo3d__canvas" id="logo3dCanvas"></div>
+        <div class="logo3d__fallback" aria-hidden="true">●</div>
+      </div>
+
       <section class="hero stage">
         <p class="hero__index reveal">Nº001 / Desk</p>
         <div class="hero__marquee" aria-hidden="true">
@@ -111,39 +117,66 @@
       </section>
     </div><!-- /.desk-top -->
 
-    <main class="stage">
-      <!-- STEP 1: UPLOAD -->
-      <section class="panel reveal" id="dropCard">
-        <div class="panel__head">
-          <span class="panel__index">Nº002</span>
-          <h2 class="panel__title">Load your record</h2>
-        </div>
-        <div class="dropzone hover_effect" id="dropzone" tabindex="0" role="button"
-             aria-label="Upload an audio file">
-          <div class="dropzone__inner">
-            <p class="dropzone__kicker">Drop audio</p>
-            <p class="dropzone__title">WAV · FLAC · MP3</p>
-            <p class="dropzone__hint">Click or drag — up to ~10&nbsp;min</p>
-            <button class="btn btn--ghost hover_effect" type="button" id="browseBtn">Choose file</button>
+    <main class="desk-body">
+      <!-- STEP 1: UPLOAD — wash band -->
+      <section class="band band--wash reveal" id="dropCard">
+        <div class="band__marquee" aria-hidden="true">
+          <div class="band__marquee-track">
+            <span>● LOAD</span><span>● LOAD</span><span>● LOAD</span>
+            <span>● LOAD</span><span>● LOAD</span><span>● LOAD</span>
+            <span>● LOAD</span><span>● LOAD</span>
           </div>
-          <input type="file" id="fileInput" accept=".wav,.flac,.mp3,audio/wav,audio/flac,audio/mpeg" hidden />
         </div>
-        <div class="filecard hidden" id="fileCard">
-          <div class="filecard__icon" id="fileFormat">WAV</div>
-          <div class="filecard__meta">
-            <div class="filecard__name" id="fileName">track.wav</div>
-            <div class="filecard__sub" id="fileSub">—</div>
+        <div class="band__frame">
+          <div class="separator">
+            <span class="separator__index">Nº002 / Load</span>
+            <span class="separator__note">Drop the master candidate</span>
           </div>
-          <button class="btn btn--ghost btn--sm hover_effect" id="clearBtn" type="button">Replace</button>
+          <div class="panel panel--flush">
+            <div class="panel__head">
+              <span class="panel__index">Nº002</span>
+              <h2 class="panel__title">Load your record</h2>
+            </div>
+            <div class="dropzone hover_effect" id="dropzone" tabindex="0" role="button"
+                 aria-label="Upload an audio file">
+              <div class="dropzone__inner">
+                <p class="dropzone__kicker">Drop audio</p>
+                <p class="dropzone__title">WAV · FLAC · MP3</p>
+                <p class="dropzone__hint">Click or drag — up to ~10&nbsp;min</p>
+                <button class="btn btn--ghost hover_effect" type="button" id="browseBtn">Choose file</button>
+              </div>
+              <input type="file" id="fileInput" accept=".wav,.flac,.mp3,audio/wav,audio/flac,audio/mpeg" hidden />
+            </div>
+            <div class="filecard hidden" id="fileCard">
+              <div class="filecard__icon" id="fileFormat">WAV</div>
+              <div class="filecard__meta">
+                <div class="filecard__name" id="fileName">track.wav</div>
+                <div class="filecard__sub" id="fileSub">—</div>
+              </div>
+              <button class="btn btn--ghost btn--sm hover_effect" id="clearBtn" type="button">Replace</button>
+            </div>
+          </div>
         </div>
       </section>
 
-      <!-- STEP 2: DIRECTION -->
-      <section class="panel reveal" id="controlsCard">
-        <div class="panel__head">
-          <span class="panel__index">Nº003</span>
-          <h2 class="panel__title">Set the direction</h2>
+      <!-- STEP 2: DIRECTION — navy band -->
+      <section class="band band--navy reveal" id="controlsCard">
+        <div class="band__marquee" aria-hidden="true">
+          <div class="band__marquee-track">
+            <span>● DIRECTION</span><span>● DIRECTION</span><span>● DIRECTION</span>
+            <span>● DIRECTION</span><span>● DIRECTION</span><span>● DIRECTION</span>
+          </div>
         </div>
+        <div class="band__frame">
+          <div class="separator">
+            <span class="separator__index">Nº003 / Direction</span>
+            <span class="separator__note">Genre · loudness · taste</span>
+          </div>
+          <div class="panel panel--flush">
+            <div class="panel__head">
+              <span class="panel__index">Nº003</span>
+              <h2 class="panel__title">Set the direction</h2>
+            </div>
 
         <div class="ctl">
           <label class="ctl__label">Genre &amp; standard</label>
@@ -217,31 +250,54 @@
           </div>
         </div>
 
-        <button class="btn btn--primary btn--block hover_effect" id="processBtn" type="button" disabled>
-          <span class="btn__label">Master my track</span>
-        </button>
+            <button class="btn btn--primary btn--block hover_effect" id="processBtn" type="button" disabled>
+              <span class="btn__label">Master my track</span>
+            </button>
+          </div>
+        </div>
       </section>
 
-      <!-- PROGRESS -->
-      <section class="panel progress-card hidden reveal cursor_disabled" id="progressCard">
-        <div class="panel__head">
-          <span class="panel__index">Nº · Live</span>
-          <h2 class="panel__title">Working the console</h2>
+      <!-- PROGRESS — ink band -->
+      <section class="band band--ink progress-card hidden reveal cursor_disabled" id="progressCard">
+        <div class="band__frame">
+          <div class="separator">
+            <span class="separator__index">Nº · Live</span>
+            <span class="separator__note">Console running</span>
+          </div>
+          <div class="panel panel--flush">
+            <div class="panel__head">
+              <span class="panel__index">Nº · Live</span>
+              <h2 class="panel__title">Working the console</h2>
+            </div>
+            <div class="progress cursor_disabled">
+              <div class="progress__bar" id="progressBar"></div>
+            </div>
+            <div class="progress__stage" id="progressStage">Listening…</div>
+          </div>
         </div>
-        <div class="progress cursor_disabled">
-          <div class="progress__bar" id="progressBar"></div>
-        </div>
-        <div class="progress__stage" id="progressStage">Listening…</div>
       </section>
 
-      <!-- STEP 3: RESULT -->
-      <section class="panel result hidden reveal" id="resultCard">
-        <div class="panel__head">
-          <span class="panel__index">Nº004</span>
-          <h2 class="panel__title">Your master</h2>
+      <!-- STEP 3: RESULT — paper band with accent -->
+      <section class="band band--paper result hidden reveal" id="resultCard">
+        <div class="band__marquee" aria-hidden="true">
+          <div class="band__marquee-track">
+            <span>● MASTER</span><span>● MASTER</span><span>● MASTER</span>
+            <span>● MASTER</span><span>● MASTER</span><span>● MASTER</span>
+            <span>● MASTER</span><span>● MASTER</span>
+          </div>
         </div>
+        <div class="band__frame">
+          <div class="separator">
+            <span class="separator__index">Nº004 / Master</span>
+            <span class="separator__note">A/B · meters · download</span>
+          </div>
+          <div class="panel panel--flush">
+            <div class="panel__head">
+              <span class="panel__index">Nº004</span>
+              <h2 class="panel__title">Your master</h2>
+            </div>
 
-        <div class="result-media cursor_disabled">
+            <div class="result-media cursor_disabled">
           <div class="ab">
             <div class="ab__toggle" role="tablist">
               <button class="ab__btn hover_effect is-active" id="abOriginal" role="tab">Original</button>
@@ -269,18 +325,24 @@
           <div class="analysis" id="analysisNotes"></div>
         </div>
 
-        <button class="btn btn--primary btn--block hover_effect" id="downloadBtn" type="button">
-          <span class="btn__label">Download master <span aria-hidden="true">↗</span></span>
-        </button>
-        <p class="result__note" id="downloadNote"></p>
+            <button class="btn btn--primary btn--block hover_effect" id="downloadBtn" type="button">
+              <span class="btn__label">Download master <span aria-hidden="true">↗</span></span>
+            </button>
+            <p class="result__note" id="downloadNote"></p>
+          </div>
+        </div>
       </section>
 
-      <footer class="footnote">
-        <p>
-          <span class="brand__dot">●</span> MIXMASTER LA — audio never leaves the browser.
-          ITU-R BS.1770 · true-peak limiting · Los Angeles.
-        </p>
-      </footer>
+      <div class="band band--ink footnote-band">
+        <div class="band__frame">
+          <footer class="footnote">
+            <p>
+              <span class="brand__dot">●</span> MIXMASTER LA — audio never leaves the browser.
+              ITU-R BS.1770 · true-peak limiting · Los Angeles.
+            </p>
+          </footer>
+        </div>
+      </div>
     </main>
 
   </body>

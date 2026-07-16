@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
-    "libflacjs": "^5.4.0"
+    "libflacjs": "^5.4.0",
+    "three": "^0.170.0"
   }
 }

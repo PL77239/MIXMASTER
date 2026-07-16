@@ -150,6 +150,54 @@ body.is-touch .cursor-glide { display: none !important; }
   .cursor { display: none; }
 }
 
+/* ---------- 3D logo (pxpush-style) ---------- */
+.logo3d {
+  --logo-scale: 1;
+  --logo-top: 48vh;
+  position: fixed;
+  left: 50%;
+  top: var(--logo-top);
+  width: min(58vw, 460px);
+  height: min(28vh, 240px);
+  transform: translate(-50%, -50%) scale(var(--logo-scale));
+  transform-origin: 50% 0%;
+  z-index: 12;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.logo3d.is-ready { opacity: 1; }
+.logo3d.is-docked {
+  z-index: 22;
+  cursor: pointer;
+}
+.logo3d.is-fallback {
+  opacity: 0.55;
+  display: grid;
+  place-items: center;
+}
+.logo3d.is-fallback .logo3d__canvas { display: none; }
+.logo3d.is-fallback .logo3d__fallback {
+  display: block;
+  font-size: clamp(48px, 10vw, 96px);
+  color: #eceae4;
+  line-height: 1;
+}
+.logo3d__fallback { display: none; }
+.logo3d__canvas,
+.logo3d__canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+@media screen and (max-width: 700px) {
+  .logo3d {
+    width: 72vw;
+    height: 28vh;
+    top: 38vh;
+  }
+}
+
 /* ============================================================
    TIDEWAVE — removable dark cursor-reactive waves (hero clouds)
    Delete this whole block when removing the feature.
@@ -158,6 +206,7 @@ body.is-touch .cursor-glide { display: none !important; }
   position: relative;
   overflow: hidden;
   background: var(--paper);
+  min-height: 100svh;
 }
 .tidewave {
   position: absolute;
@@ -228,7 +277,8 @@ body.has-tidewave .hero__sub b { color: #fff; }
 body.has-tidewave .hero {
   border-bottom: none;
   padding-top: 48px;
-  padding-bottom: 72px;
+  padding-bottom: 120px;
+  min-height: 72vh;
 }
 body.has-tidewave .hero__marquee { opacity: 0.08; color: #fff; }
 body.has-tidewave .btn--primary {
@@ -304,6 +354,235 @@ body.has-tidewave .btn--primary:hover {
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+.desk-body {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Section bands (variety like pxpush Nº001–004) ---------- */
+.band {
+  position: relative;
+  padding: 4vw 0 8vw;
+  --band-fg: var(--ink);
+  --band-fg-soft: var(--ink-soft);
+  --band-fg-faint: var(--ink-faint);
+  --band-line: var(--line);
+  --band-line-strong: var(--line-strong);
+  --band-surface: #fff;
+  --band-accent: var(--accent);
+  color: var(--band-fg);
+  background: var(--band-bg, var(--paper));
+  overflow: clip;
+}
+.band__frame {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 clamp(18px, 4vw, 48px);
+  position: relative;
+  z-index: 1;
+}
+.band__marquee {
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.09;
+  margin-bottom: 1.5vw;
+}
+.band__marquee-track {
+  display: flex;
+  gap: 2.5vw;
+  width: max-content;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(52px, 11vw, 120px);
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  white-space: nowrap;
+  animation: marquee-glide 32s linear infinite;
+}
+
+.separator {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  border-top: 1px solid var(--band-line);
+  padding-top: 14px;
+  margin-bottom: 28px;
+  position: sticky;
+  top: 10px;
+  z-index: 2;
+  background: linear-gradient(
+    180deg,
+    var(--band-bg, var(--paper)) 65%,
+    transparent 100%
+  );
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--band-fg-faint);
+}
+.separator__note { opacity: 0.7; }
+@media screen and (max-width: 600px) {
+  .separator { flex-direction: column; gap: 6px; }
+}
+
+.band--wash {
+  --band-bg: #d8d4cb;
+  --band-fg: #121212;
+  --band-fg-soft: #2e2e2e;
+  --band-fg-faint: #5a5a5a;
+  --band-line: rgba(18, 18, 18, 0.18);
+  --band-line-strong: rgba(18, 18, 18, 0.32);
+  --band-surface: #efece5;
+  --band-accent: #0a3d91;
+}
+.band--navy {
+  --band-bg: #0a3d91;
+  --band-fg: #eceae4;
+  --band-fg-soft: rgba(236, 234, 228, 0.78);
+  --band-fg-faint: rgba(236, 234, 228, 0.5);
+  --band-line: rgba(236, 234, 228, 0.22);
+  --band-line-strong: rgba(236, 234, 228, 0.4);
+  --band-surface: rgba(255, 255, 255, 0.08);
+  --band-accent: #9eb6ff;
+}
+.band--ink {
+  --band-bg: #121212;
+  --band-fg: #eceae4;
+  --band-fg-soft: rgba(236, 234, 228, 0.72);
+  --band-fg-faint: rgba(236, 234, 228, 0.45);
+  --band-line: rgba(236, 234, 228, 0.18);
+  --band-line-strong: rgba(236, 234, 228, 0.35);
+  --band-surface: #1c1c1c;
+  --band-accent: #9eb6ff;
+}
+.band--paper {
+  --band-bg: #eceae4;
+  --band-fg: #121212;
+  --band-fg-soft: #3a3a3a;
+  --band-fg-faint: #6e6e6e;
+  --band-line: rgba(18, 18, 18, 0.14);
+  --band-line-strong: rgba(18, 18, 18, 0.28);
+  --band-surface: #fff;
+  --band-accent: #0a3d91;
+}
+
+.band .panel__title,
+.band .panel__index,
+.band .ctl__label,
+.band .ctl__hint,
+.band .dropzone__kicker,
+.band .dropzone__hint,
+.band .filecard__sub,
+.band .progress__stage,
+.band .result__note,
+.band .listen-room__label,
+.band .time,
+.band .meter__label,
+.band .meter__delta {
+  color: inherit;
+}
+.band .panel__index,
+.band .ctl__hint,
+.band .dropzone__kicker,
+.band .dropzone__hint,
+.band .filecard__sub,
+.band .progress__stage,
+.band .result__note,
+.band .listen-room__label,
+.band .time,
+.band .meter__label,
+.band .meter__delta {
+  color: var(--band-fg-faint);
+}
+.band .panel__title,
+.band .dropzone__title,
+.band .filecard__name,
+.band .meter__val {
+  color: var(--band-fg);
+}
+.band .ctl__label { color: var(--band-fg-soft); }
+
+.band--navy .btn--primary,
+.band--ink .btn--primary {
+  background: #eceae4;
+  color: #121212;
+  border-color: #eceae4;
+}
+.band--navy .btn--primary:hover,
+.band--ink .btn--primary:hover {
+  background: #fff;
+  border-color: #fff;
+}
+.band--navy .btn--ghost,
+.band--ink .btn--ghost,
+.band--navy .select,
+.band--ink .select,
+.band--navy .room-btn,
+.band--ink .room-btn,
+.band--navy .genre,
+.band--ink .genre,
+.band--navy .ab__btn,
+.band--ink .ab__btn,
+.band--navy .ref-url,
+.band--ink .ref-url {
+  color: var(--band-fg);
+  border-color: var(--band-line-strong);
+  background: transparent;
+}
+.band--navy .dropzone,
+.band--ink .dropzone,
+.band--navy .filecard,
+.band--ink .filecard,
+.band--navy .meter,
+.band--ink .meter,
+.band--navy .viz,
+.band--ink .viz {
+  background: var(--band-surface);
+  border-color: var(--band-line);
+  color: var(--band-fg);
+}
+.band--navy .genre.is-active,
+.band--ink .genre.is-active,
+.band--navy .room-btn.is-active,
+.band--ink .room-btn.is-active,
+.band--navy .ab__btn.is-active,
+.band--ink .ab__btn.is-active {
+  background: #eceae4;
+  color: #121212;
+  border-color: #eceae4;
+}
+.band--navy .genre.is-active .genre__desc,
+.band--ink .genre.is-active .genre__desc {
+  color: rgba(18, 18, 18, 0.55);
+}
+.band--navy .genre__desc,
+.band--ink .genre__desc,
+.band--navy .slider label,
+.band--ink .slider label {
+  color: var(--band-fg-faint);
+}
+.band--navy .slider output,
+.band--ink .slider output {
+  color: var(--band-fg);
+}
+.band--wash .dropzone,
+.band--paper .dropzone {
+  background: var(--band-surface);
+}
+.band--navy input[type="range"],
+.band--ink input[type="range"] {
+  accent-color: #9eb6ff;
+}
+.footnote-band {
+  padding: 3vw 0 5vw;
+}
+.footnote-band .footnote {
+  border-top: 1px solid var(--band-line);
+  color: var(--band-fg-faint);
 }
 
 /* ---------- Hero ---------- */
@@ -406,9 +685,14 @@ body.has-tidewave .btn--primary:hover {
 /* ---------- Panels (not glassy cards) ---------- */
 .panel {
   padding: 40px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--band-line, var(--line));
   content-visibility: auto;
   contain-intrinsic-size: auto 480px;
+}
+.panel--flush {
+  border-bottom: none;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 .panel__head {
   display: flex;
@@ -894,7 +1178,9 @@ input[type="range"]::-moz-range-thumb {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero__marquee-track { animation: none; }
+  .hero__marquee-track,
+  .band__marquee-track { animation: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .cursor__ring, .cursor__dot { transition: none; }
+  .logo3d { transition: none; }
 }

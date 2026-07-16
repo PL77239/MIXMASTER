@@ -10,6 +10,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 
 /** Zones where tile paint must not appear */
 const SKIP_SELECTOR = [
+  '.logo3d',
   '.cursor_disabled',
   '.hover_effect',
   '.viz',
