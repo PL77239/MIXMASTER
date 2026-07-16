@@ -11,11 +11,10 @@ import { ABPlayer } from './ui/player.js';
 import { initCursor } from './ui/cursor.js';
 import { initTidewave } from './ui/tidewave.js';
 import {
-  initScrollStack,
-  refreshScrollStack,
-  scrollStackGoHome,
-  scrollStackGoTo,
-} from './ui/scrollStack.js';
+  initScrollMotion,
+  scrollGoHome,
+  scrollGoTo,
+} from './ui/scrollMotion.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -72,8 +71,7 @@ function resetSession() {
 
   if (typeof updateRefHint === 'function') updateRefHint();
 
-  refreshScrollStack();
-  scrollStackGoHome();
+  scrollGoHome();
   toast('Ready for a new track.');
 }
 
@@ -485,8 +483,7 @@ function showResults(result) {
   $('downloadNote').textContent =
     `Ready as ${state.decoded.format.toUpperCase()} · ${sizeKB} KB · ` +
     `same format & sample rate as your upload.`;
-  refreshScrollStack();
-  scrollStackGoTo('resultCard');
+  scrollGoTo('resultCard');
 }
 
 // ---------- process ----------
@@ -496,8 +493,7 @@ async function runProcess() {
   $('processBtn').disabled = true;
   $('progressCard').classList.remove('hidden');
   $('resultCard').classList.add('hidden');
-  refreshScrollStack();
-  scrollStackGoTo('progressCard');
+  scrollGoTo('progressCard');
   player.pause();
   setProgress(0.02, 'Warming up the console…');
 
@@ -521,14 +517,12 @@ async function runProcess() {
     setProgress(1, 'Master ready.');
     await new Promise((r) => setTimeout(r, 250));
     $('progressCard').classList.add('hidden');
-    refreshScrollStack();
     showResults(result);
     toast('Master complete — have a listen.');
   } catch (err) {
     console.error(err);
     toast('Processing failed: ' + (err.message || err), true);
     $('progressCard').classList.add('hidden');
-    refreshScrollStack();
   } finally {
     state.busy = false;
     $('processBtn').disabled = false;
@@ -596,6 +590,6 @@ bindResultControls();
 bindBrandHome();
 initCursor();
 initTidewave();
-initScrollStack();
+initScrollMotion();
 void import('./ui/logo3d.js').then((m) => m.initLogo3d());
 $('processBtn').addEventListener('click', runProcess);

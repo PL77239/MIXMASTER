@@ -73,18 +73,12 @@ export function initTidewave() {
   };
 
   const updateHideFromScroll = () => {
-    // Scroll-stack: home is panel 0 — hide waves once we've left it
-    const active = Number(document.documentElement.dataset.activePanel ?? 0);
-    if (Number.isFinite(active) && active > 0) {
-      hideTarget = 1;
-      return;
-    }
     if (!shell) {
       hideTarget = 0;
       return;
     }
     const rect = shell.getBoundingClientRect();
-    // 0 while hero fills the top; → 1 as desk-top shoves away
+    // 0 while hero fills the top; → 1 as desk-top scrolls away
     const span = Math.max(180, rect.height * 0.55);
     hideTarget = clamp01((-rect.top) / span);
   };

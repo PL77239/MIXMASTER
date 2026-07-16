@@ -17,8 +17,8 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-BsYdxtGC.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BZzo2fkv.css">
+    <script type="module" crossorigin src="./assets/index-b2nL9hxj.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-72CyiIwK.css">
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -72,13 +72,10 @@
     </div>
 
     <!--
-      Scroll stack: almost-static viewport. Scrolling shoves the previous
-      panel up and brings the next section into place.
+      Native scroll (pxpush-style): sections shove previous content up as you
+      scroll; motion is scrubbed transforms + expands — never a scroll trap.
     -->
-    <div class="scroll-stack" id="scrollStack">
-      <div class="scroll-stack__stage" id="scrollStage">
-
-    <div class="stack-panel desk-top" data-stack-panel id="homePanel">
+    <div class="desk-top" id="homePanel">
       <div class="tidewave" id="tidewave" aria-hidden="true">
         <div class="tidewave__wash"></div>
         <svg class="tidewave__layer tidewave__layer--a" data-tide-depth="0.25" viewBox="0 0 1440 320" preserveAspectRatio="none">
@@ -122,13 +119,14 @@
         </p>
         <div class="hero__cta" data-expand>
           <a class="btn btn--primary hover_effect" href="#dropCard">Load your record <span aria-hidden="true">↗</span></a>
-          <span class="hero__scroll-hint">Scroll — next section shoves this up</span>
+          <span class="hero__scroll-hint">Scroll down — sections shove up</span>
         </div>
       </section>
-    </div><!-- /#homePanel -->
+    </div><!-- /.desk-top -->
 
+    <main class="desk-body">
       <!-- STEP 1: UPLOAD — wash band -->
-      <section class="band band--wash stack-panel" data-stack-panel id="dropCard">
+      <section class="band band--wash reveal" id="dropCard">
         <div class="band__marquee" aria-hidden="true" data-expand>
           <div class="band__marquee-track">
             <span>● LOAD</span><span>● LOAD</span><span>● LOAD</span>
@@ -169,7 +167,7 @@
       </section>
 
       <!-- STEP 2: DIRECTION — navy band -->
-      <section class="band band--navy stack-panel" data-stack-panel id="controlsCard">
+      <section class="band band--navy reveal" id="controlsCard">
         <div class="band__marquee" aria-hidden="true" data-expand>
           <div class="band__marquee-track">
             <span>● DIRECTION</span><span>● DIRECTION</span><span>● DIRECTION</span>
@@ -267,7 +265,7 @@
       </section>
 
       <!-- PROGRESS — ink band -->
-      <section class="band band--ink progress-card stack-panel hidden cursor_disabled" data-stack-panel id="progressCard">
+      <section class="band band--ink progress-card hidden reveal cursor_disabled" id="progressCard">
         <div class="band__frame">
           <div class="separator" data-expand>
             <span class="separator__index">Nº · Live</span>
@@ -287,7 +285,7 @@
       </section>
 
       <!-- STEP 3: RESULT — paper band with accent -->
-      <section class="band band--paper result stack-panel hidden" data-stack-panel id="resultCard">
+      <section class="band band--paper result hidden reveal" id="resultCard">
         <div class="band__marquee" aria-hidden="true" data-expand>
           <div class="band__marquee-track">
             <span>● MASTER</span><span>● MASTER</span><span>● MASTER</span>
@@ -342,7 +340,7 @@
         </div>
       </section>
 
-      <div class="band band--ink footnote-band stack-panel" data-stack-panel id="footnotePanel">
+      <div class="band band--ink footnote-band">
         <div class="band__frame">
           <footer class="footnote">
             <p>
@@ -352,9 +350,7 @@
           </footer>
         </div>
       </div>
-
-      </div><!-- /#scrollStage -->
-    </div><!-- /#scrollStack -->
+    </main>
 
   </body>
 </html>

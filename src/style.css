@@ -222,8 +222,11 @@ body:has(.logo3d.is-fallback) .brand {
   /* room for fixed topbar */
   padding-top: 64px;
 }
-.stack-panel.band {
-  padding-top: calc(4vw + 64px);
+/* Soft lift as hero scrolls away (pxpush intro) */
+.desk-top .hero {
+  transform: translate3d(0, calc(var(--hero-leave, 0) * -36px), 0);
+  opacity: calc(1 - var(--hero-leave, 0) * 0.45);
+  will-change: transform, opacity;
 }
 .tidewave {
   position: absolute;
@@ -298,50 +301,6 @@ body.has-tidewave .btn--primary:hover {
   color: #121212;
 }
 /* ========== end TIDEWAVE ========== */
-
-/* ---------- Scroll stack (static viewport, shove-up panels) ---------- */
-.scroll-stack {
-  position: relative;
-  width: 100%;
-  /* height set by JS: N * 100vh */
-}
-.scroll-stack__stage {
-  position: sticky;
-  top: 0;
-  height: 100svh;
-  width: 100%;
-  overflow: hidden;
-  z-index: 1;
-  background: var(--paper);
-}
-/* Must beat `.band { position: relative }` — same specificity otherwise loses */
-.scroll-stack__stage > .stack-panel,
-.stack-panel.band,
-.stack-panel.desk-top {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  will-change: transform;
-  backface-visibility: hidden;
-  background: var(--band-bg, var(--paper));
-}
-.stack-panel.desk-top {
-  min-height: 100%;
-  background: var(--paper);
-}
-html.has-scroll-stack {
-  scroll-behavior: auto;
-}
-@media (prefers-reduced-motion: reduce) {
-  html.has-scroll-stack { scroll-behavior: auto; }
-  .stack-panel { will-change: auto; }
-}
 
 /* ---------- Top bar ---------- */
 .topbar {
@@ -426,7 +385,7 @@ html.has-scroll-stack {
 /* ---------- Section bands (variety like pxpush Nº001–004) ---------- */
 .band {
   position: relative;
-  padding: 4vw 0 8vw;
+  padding: calc(4vw + 24px) 0 8vw;
   --band-fg: var(--ink);
   --band-fg-soft: var(--ink-soft);
   --band-fg-faint: var(--ink-faint);
@@ -464,6 +423,7 @@ html.has-scroll-stack {
   line-height: 0.95;
   white-space: nowrap;
   animation: marquee-glide 32s linear infinite;
+  transform: translate3d(var(--marquee-drift, 0px), 0, 0);
 }
 
 .separator {
@@ -475,7 +435,7 @@ html.has-scroll-stack {
   padding-top: 14px;
   margin-bottom: 28px;
   position: sticky;
-  top: 10px;
+  top: 64px; /* under fixed topbar */
   z-index: 2;
   background: linear-gradient(
     180deg,
@@ -685,6 +645,7 @@ html.has-scroll-stack {
   line-height: 1;
   white-space: nowrap;
   animation: marquee-glide 28s linear infinite;
+  transform: translate3d(var(--marquee-drift, 0px), 0, 0);
 }
 @keyframes marquee-glide {
   from { transform: translateX(0); }
@@ -1214,28 +1175,50 @@ input[type="range"]::-moz-range-thumb {
 
 .hidden { display: none !important; }
 
-/* Panel content expands when the stack brings a section into place */
-.stack-panel [data-expand] {
+/* Reveal / expand on scroll (pxpush section energy) */
+.reveal:not(.band) {
+  opacity: 0;
+  transform: translateY(28px) scale(0.97);
+  transition:
+    opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal:not(.band).is-in {
+  opacity: 1;
+  transform: none;
+}
+/* Bands keep scrub transforms; expand clip on enter */
+.band.reveal {
+  clip-path: inset(8% 3% 8% 3%);
+  transition: clip-path 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.band.reveal.is-in {
+  clip-path: inset(0 0 0 0);
+}
+
+[data-expand] {
   opacity: 0;
   transform: translateY(22px);
   transition:
     opacity 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) var(--expand-delay, 0ms),
     transform 0.75s cubic-bezier(0.16, 1, 0.3, 1) var(--expand-delay, 0ms);
 }
-.stack-panel [data-expand].is-in,
-.stack-panel.is-stack-active [data-expand] {
+[data-expand].is-in {
   opacity: 1;
   transform: none;
 }
-/* Before JS boots, keep expand targets readable */
-html:not(.has-scroll-stack) .stack-panel [data-expand] {
+html:not(.has-scroll-motion) [data-expand],
+html:not(.has-scroll-motion) .reveal:not(.band) {
   opacity: 1;
   transform: none;
 }
-.stack-panel.footnote-band {
-  display: flex;
-  align-items: center;
-  background: #121212;
+html:not(.has-scroll-motion) .band.reveal {
+  clip-path: none;
+}
+
+.footnote-band {
+  padding-top: 4vw;
+  padding-bottom: 4vw;
 }
 
 @media (max-width: 720px) {
@@ -1252,10 +1235,15 @@ html:not(.has-scroll-stack) .stack-panel [data-expand] {
 @media (prefers-reduced-motion: reduce) {
   .hero__marquee-track,
   .band__marquee-track { animation: none; }
-  .stack-panel [data-expand] {
-    opacity: 1;
-    transform: none;
-    transition: none;
+  .reveal:not(.band),
+  .band.reveal,
+  [data-expand],
+  .desk-top,
+  .band {
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+    transition: none !important;
   }
   .cursor__ring, .cursor__dot { transition: none; }
   .logo3d { transition: none; }
