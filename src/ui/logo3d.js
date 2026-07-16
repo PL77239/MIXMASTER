@@ -74,7 +74,7 @@ export function initLogo3d() {
     stickyActive = true;
 
     root.style.setProperty('--logo-scale', scale.toFixed(4));
-    root.style.setProperty('--logo-top', '10px');
+    root.style.setProperty('--logo-top', '56px');
     root.style.setProperty('--logo-left', 'clamp(12px, 2.5vw, 24px)');
     root.classList.toggle('is-docked', window.scrollY > 48);
     root.style.pointerEvents = 'auto';

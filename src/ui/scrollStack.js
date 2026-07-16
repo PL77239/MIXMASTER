@@ -1,6 +1,10 @@
 /**
- * Almost-static scroll stack: the viewport stays put while sections
- * shove the previous panel upward and slide the next into place.
+ * Almost-static scroll stack: sticky viewport; scrolling shoves the
+ * previous panel up and slides the next into place.
+ *
+ * Structure: #scrollStack gets height = N * 100vh; #scrollStage is
+ * position:sticky inside it (NOT a spacer sibling ahead of the stage —
+ * that left the viewport blank).
  */
 
 const reduceMotion = () =>
@@ -13,40 +17,26 @@ function clamp(x, lo, hi) {
 export function initScrollStack() {
   const root = document.getElementById('scrollStack');
   const stage = document.getElementById('scrollStage');
-  const spacer = document.getElementById('scrollSpacer');
-  if (!root || !stage || !spacer) return () => {};
+  if (!root || !stage) return () => {};
+
+  // Remove legacy spacer if present
+  document.getElementById('scrollSpacer')?.remove();
 
   document.documentElement.classList.add('has-scroll-stack');
 
   let raf = 0;
-  let panelCount = 0;
 
   const panels = () =>
     [...stage.querySelectorAll('[data-stack-panel]')].filter(
       (p) => !p.classList.contains('hidden')
     );
 
-  function layout() {
-    const list = panels();
-    panelCount = Math.max(1, list.length);
-    // One viewport of scroll travel per transition between panels
-    const vh = window.innerHeight || 1;
-    spacer.style.height = `${panelCount * 100}vh`;
-    list.forEach((p, i) => {
-      p.style.zIndex = String(20 + i);
-      p.setAttribute('data-stack-index', String(i));
-    });
-    // Ensure inactive absolute panels don't steal focus scroll oddly
-    void vh;
-    tick();
-  }
-
   function activateExpands(panel) {
     if (!panel) return;
     panel.classList.add('is-in');
     panel.querySelectorAll('[data-expand]').forEach((child, i) => {
-      child.style.setProperty('--expand-delay', `${60 + i * 70}ms`);
-      requestAnimationFrame(() => child.classList.add('is-in'));
+      child.style.setProperty('--expand-delay', `${40 + i * 60}ms`);
+      child.classList.add('is-in');
     });
   }
 
@@ -56,28 +46,38 @@ export function initScrollStack() {
     if (!list.length) return;
 
     const vh = window.innerHeight || 1;
-    const maxScroll = Math.max(1, (list.length - 1) * vh);
-    const y = clamp(window.scrollY || window.pageYOffset || 0, 0, maxScroll + vh);
-    // Progress in “panel units”
+    const maxIdx = Math.max(0, list.length - 1);
+    const y = clamp(window.scrollY || window.pageYOffset || 0, 0, maxIdx * vh + 1);
     const raw = reduceMotion()
-      ? Math.round(clamp(y / vh, 0, list.length - 1))
-      : clamp(y / vh, 0, list.length - 1);
+      ? Math.round(clamp(y / vh, 0, maxIdx))
+      : clamp(y / vh, 0, maxIdx);
 
     let active = 0;
     list.forEach((panel, i) => {
       const yPct = (i - raw) * 100;
       panel.style.transform = `translate3d(0, ${yPct}%, 0)`;
-      panel.classList.toggle('is-stack-active', Math.abs(i - raw) < 0.55);
-      panel.classList.toggle('is-stack-leaving', raw > i && raw < i + 1);
-      if (Math.abs(i - raw) < 0.55) active = i;
+      panel.style.zIndex = String(10 + i);
+      const near = Math.abs(i - raw) < 0.6;
+      panel.classList.toggle('is-stack-active', near);
+      panel.style.pointerEvents = near ? 'auto' : 'none';
+      panel.setAttribute('aria-hidden', near ? 'false' : 'true');
+      if (near) active = i;
     });
 
     activateExpands(list[active]);
-    // Warm-expand the next panel slightly early
-    if (list[active + 1] && raw > active + 0.35) activateExpands(list[active + 1]);
+    if (list[active + 1] && raw > active + 0.25) activateExpands(list[active + 1]);
 
     root.dataset.activePanel = String(active);
     document.documentElement.dataset.activePanel = String(active);
+  }
+
+  function layout() {
+    const list = panels();
+    const n = Math.max(1, list.length);
+    // Sticky stage is 100vh; parent must be n * 100vh so scroll spans 0 → n-1
+    root.style.height = `${n * 100}vh`;
+    list.forEach((p, i) => p.setAttribute('data-stack-index', String(i)));
+    tick();
   }
 
   function onScroll() {
@@ -87,6 +87,7 @@ export function initScrollStack() {
 
   function goHome() {
     window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+    requestAnimationFrame(tick);
   }
 
   function goToPanel(idOrEl) {
@@ -94,15 +95,16 @@ export function initScrollStack() {
     const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
     const idx = list.indexOf(el);
     if (idx < 0) return;
-    const top = idx * (window.innerHeight || 1);
-    window.scrollTo({ top, behavior: reduceMotion() ? 'auto' : 'smooth' });
+    window.scrollTo({
+      top: idx * (window.innerHeight || 1),
+      behavior: reduceMotion() ? 'auto' : 'smooth',
+    });
   }
 
   function refresh() {
     layout();
   }
 
-  // Intercept in-page anchors to stack panels (#dropCard etc.)
   document.addEventListener('click', (e) => {
     const a = e.target.closest?.('a[href^="#"]');
     if (!a) return;
@@ -117,9 +119,15 @@ export function initScrollStack() {
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', layout);
 
+  // First paint: show home immediately (before any scroll)
+  const first = panels()[0];
+  if (first) {
+    first.style.transform = 'translate3d(0, 0%, 0)';
+    first.style.pointerEvents = 'auto';
+    first.classList.add('is-stack-active');
+    activateExpands(first);
+  }
   layout();
-  // Hero content visible immediately
-  activateExpands(panels()[0]);
 
   const api = { refresh, goHome, goToPanel, layout };
   window.__scrollStack = api;
@@ -127,6 +135,7 @@ export function initScrollStack() {
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', layout);
     document.documentElement.classList.remove('has-scroll-stack');
+    root.style.height = '';
     if (raf) cancelAnimationFrame(raf);
     delete window.__scrollStack;
   };
