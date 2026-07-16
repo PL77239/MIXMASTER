@@ -19,6 +19,7 @@ import {
   averageReferences,
   referenceMatchEq,
 } from './reference.js';
+import { findSimilar } from './refMemory.js';
 import { protectsLowEnd, wantsWideSides } from './methodology.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -130,20 +131,42 @@ export function planSession(diag, settings) {
 
   // ── Analyze references FIRST (Matchering-style) ───────────────────
   let refProfile = null;
+  let refFromMemory = null;
+  let liveRefProfiles = null;
   const refBuffers = settings.referenceBuffers?.filter(Boolean) || [];
   if (refBuffers.length) {
-    const profiles = refBuffers.map((b, i) =>
+    liveRefProfiles = refBuffers.map((b, i) =>
       analyzeReference(b, settings.referenceNames?.[i] || `Reference ${i + 1}`)
     );
-    refProfile = averageReferences(profiles);
+    refProfile = averageReferences(liveRefProfiles);
     log.push({
       type: 'decision',
-      text: `Analyzed ${profiles.length} similar track(s) first — matching tone / loudness / width toward “${refProfile.name}”.`,
+      text: `Analyzed ${liveRefProfiles.length} similar track(s) first — matching tone / loudness / width toward “${refProfile.name}”.`,
     });
-    for (const p of profiles) {
+    for (const p of liveRefProfiles) {
       log.push({
         type: 'finding',
         text: `${p.name}: ${p.lufs.toFixed(1)} LUFS · crest ${p.crest.toFixed(1)} dB · width ${(p.width * 100).toFixed(0)}%`,
+      });
+    }
+  } else if (diag.regions) {
+    // Soft pull from learned references when no live upload/paste this session
+    const hit = findSimilar(
+      {
+        regions: diag.regions,
+        lufs: diag.analysis?.lufs ?? settings.targetLufs,
+        width: diag.stereo?.width ?? 0.15,
+        crest: diag.analysis?.crest ?? 10,
+      },
+      settings.genre,
+      0.62,
+    );
+    if (hit) {
+      refFromMemory = hit;
+      refProfile = hit.profile;
+      log.push({
+        type: 'decision',
+        text: `Learned reference match (${Math.round(hit.score * 100)}%) — “${hit.memory.name}” from a past upload/paste, guiding tone / loudness / width.`,
       });
     }
   }
@@ -167,31 +190,41 @@ export function planSession(diag, settings) {
       : 'Guideline: subtractive EQ for clarity; balance bass/mids/treble (MasteringBOX frequency analysis).',
   });
 
-  // Conditional EQ — mud only when actually muddy (not default polish on bass genres)
-  const wantsMudCut =
-    actions.has('cut_mud') &&
-    (!lowEndProtected || sev('cut_mud') > 0.55);
-  if (wantsMudCut && t.mudCut) {
-    const mudScale = lowEndProtected ? 0.45 : 0.7 + 0.5 * sev('cut_mud');
-    const g = t.mudCut.g * scale.eqMul * mudScale;
+  // Mud control — keep residual cuts even on bass desks (compression fills 250–500 Hz)
+  const mudSev = sev('cut_mud');
+  const wantsMudCut = actions.has('cut_mud') && t.mudCut;
+  if (wantsMudCut) {
+    // Was 0.45 on protect-low-end — too soft; compression refilled the haze
+    const mudScale = lowEndProtected
+      ? 0.72 + 0.35 * mudSev
+      : 0.85 + 0.55 * mudSev;
+    let g = t.mudCut.g * scale.eqMul * mudScale;
+    // Learned refs that needed deeper mud cuts bias this session
+    if (refFromMemory?.memory?.learned?.mudBias != null && refFromMemory.memory.learned.mudBias < -0.5) {
+      g = Math.min(g, refFromMemory.memory.learned.mudBias * 0.55 * scale.eqMul);
+    }
     eq.push({
       type: 'peak',
       freq: t.mudCut.f,
       gain: polish(g),
       q: t.mudCut.q,
       label: 'Mud cut',
-      reason: 'Frequency masking in 250–500 Hz (subtractive EQ)',
+      reason: 'Frequency masking in 250–500 Hz (subtractive EQ before density)',
     });
-    if (t.boxCut && sev('cut_mud') > 0.6) {
+    if (t.boxCut && mudSev > 0.45) {
       eq.push({
         type: 'peak',
         freq: t.boxCut.f,
-        gain: polish(t.boxCut.g * scale.eqMul * (lowEndProtected ? 0.5 : 1)),
+        gain: polish(t.boxCut.g * scale.eqMul * (lowEndProtected ? 0.75 : 1)),
         q: t.boxCut.q,
         label: 'Boxiness',
-        reason: 'Clear low-mid box',
+        reason: 'Clear low-mid box after compress risk',
       });
     }
+    log.push({
+      type: 'decision',
+      text: 'Decision: carve mud before glue/parallel — density stages must not refill the haze.',
+    });
   }
 
   // Sub trim — soft on protected low-end genres (EDM wants impact)
@@ -254,11 +287,12 @@ export function planSession(diag, settings) {
     }
   }
 
-  if (actions.has('fill_lowmid')) {
+  // Never fill low-mids when mud is already the finding (avoids re-mud after compress)
+  if (actions.has('fill_lowmid') && !actions.has('cut_mud')) {
     eq.push({
       type: 'peak',
       freq: 350,
-      gain: polish(1.6 * scale.eqMul),
+      gain: polish(1.2 * scale.eqMul),
       q: 0.85,
       label: 'Body fill',
       reason: "Restore scooped low-mids (don't leave it hollow)",
@@ -382,7 +416,8 @@ export function planSession(diag, settings) {
 
   // Reference tone match (after diagnosis EQ — Matchering pull)
   if (refProfile) {
-    let matchMoves = referenceMatchEq(diag.regions, refProfile, 0.32 * scale.eqMul);
+    const matchStrength = refFromMemory ? 0.22 * scale.eqMul : 0.32 * scale.eqMul;
+    let matchMoves = referenceMatchEq(diag.regions, refProfile, matchStrength);
     // Don't let refs scoop EDM/club low end
     if (lowEndProtected) {
       matchMoves = matchMoves.map((m) => {
@@ -390,15 +425,27 @@ export function planSession(diag, settings) {
           return { ...m, gain: m.gain * 0.35 };
         }
         return m;
-      }).filter((m) => Math.abs(m.gain) >= 0.3);
+      });
     }
+    // When muddy: allow Match lowMid cuts only — never boost haze back in
+    if (actions.has('cut_mud')) {
+      matchMoves = matchMoves.map((m) => {
+        if (m.label === 'Match lowMid' && m.gain > 0) {
+          return { ...m, gain: -Math.min(1.2, m.gain * 0.4 + 0.4) };
+        }
+        return m;
+      });
+    }
+    matchMoves = matchMoves.filter((m) => Math.abs(m.gain) >= 0.3);
     for (const m of matchMoves) {
       eq.push({ ...m, gain: polish(m.gain) });
     }
     if (matchMoves.length) {
       log.push({
         type: 'decision',
-        text: `Decision: reference tone match — ${matchMoves.length} gentle bands toward analyzed similar track(s).`,
+        text: refFromMemory
+          ? `Decision: learned-reference tone match — ${matchMoves.length} soft bands.`
+          : `Decision: reference tone match — ${matchMoves.length} gentle bands toward analyzed similar track(s).`,
       });
     }
   }
@@ -527,15 +574,19 @@ export function planSession(diag, settings) {
   let sat = clamp(t.sat * scale.satMul, 0, 0.12);
 
   // Bass / dembow desks: keep density stages light — peak chain must stay transparent
-  const stageMul = lowEndProtected ? 0.45 : 1;
+  // Extra pull-back when mud is present so compress doesn't refill 250–500 Hz
+  const mudDensityMul = actions.has('cut_mud') ? clamp(1 - 0.35 * mudSev, 0.55, 0.85) : 1;
+  const stageMul = (lowEndProtected ? 0.42 : 1) * mudDensityMul;
 
   // Multiband (Maztr rock/EDM, Digital Natural Sound) — gentle per-band control
   let multiband = null;
   const mbMul = scale.mbMul * stageMul;
   if (mbMul >= 0.18 && !protect) {
     const lowRatio = 1 + 0.55 * mbMul * (lowEndProtected ? 0.4 : 1);
-    const midRatio = 1 + 0.85 * mbMul;
+    // Mid band owns the mud zone — control it harder, refill less
+    const midRatio = 1 + 0.85 * mbMul * (actions.has('cut_mud') ? 1.15 : 1);
     const highRatio = 1 + 0.65 * mbMul;
+    const midMakeup = 0.35 * mbMul * (actions.has('cut_mud') ? 0.25 : 1);
     multiband = {
       enabled: true,
       lowHz: lowEndProtected ? 150 : 190,
@@ -549,11 +600,11 @@ export function planSession(diag, settings) {
         knee: 12,
       },
       mid: {
-        threshold: -20,
-        ratio: clamp(midRatio, 1.12, 1.9),
+        threshold: actions.has('cut_mud') ? -18.5 : -20,
+        ratio: clamp(midRatio, 1.12, 2.05),
         attack: 0.02,
         release: 0.18,
-        makeupDb: 0.35 * mbMul,
+        makeupDb: midMakeup,
         knee: 10,
       },
       high: {
@@ -567,25 +618,31 @@ export function planSession(diag, settings) {
     };
     log.push({
       type: 'decision',
-      text: `Decision: multiband compress — L ${multiband.low.ratio.toFixed(2)}:1 · M ${multiband.mid.ratio.toFixed(2)}:1 · H ${multiband.high.ratio.toFixed(2)}:1 (tap, don’t slam).`,
+      text: `Decision: multiband compress — L ${multiband.low.ratio.toFixed(2)}:1 · M ${multiband.mid.ratio.toFixed(2)}:1 · H ${multiband.high.ratio.toFixed(2)}:1${actions.has('cut_mud') ? ' · mid makeup held (anti-mud)' : ''} (tap, don’t slam).`,
     });
   }
 
-  // Parallel NY compression — light on protect-low-end (latin/hiphop/EDM)
+  // Parallel NY compression — light on protect-low-end; HPF wet when muddy
   let parallel = null;
-  const parallelMix = clamp(0.22 * scale.parallelMul * stageMul, 0, lowEndProtected ? 0.18 : 0.42);
+  const parallelMix = clamp(
+    0.2 * scale.parallelMul * stageMul,
+    0,
+    lowEndProtected ? 0.14 : actions.has('cut_mud') ? 0.28 : 0.42,
+  );
   if (parallelMix >= 0.04 && !protect) {
     parallel = {
       mix: parallelMix,
       threshold: -30,
-      ratio: 3.2 + scale.parallelMul * stageMul,
+      ratio: 3.0 + scale.parallelMul * stageMul,
       attack: 0.004,
       release: 0.16,
-      makeupDb: lowEndProtected ? 2.2 : 3.5,
+      makeupDb: lowEndProtected ? 1.8 : actions.has('cut_mud') ? 2.4 : 3.5,
+      // Keep NY density above the mud band so compress doesn't thicken 250–500 Hz
+      wetHpHz: actions.has('cut_mud') ? 520 : lowEndProtected ? 280 : 0,
     };
     log.push({
       type: 'decision',
-      text: `Decision: parallel (NY) compress — ${(parallel.mix * 100).toFixed(0)}% wet under dry bus for density.`,
+      text: `Decision: parallel (NY) compress — ${(parallel.mix * 100).toFixed(0)}% wet${parallel.wetHpHz ? ` · HPF @ ${parallel.wetHpHz} Hz (anti-mud)` : ''} under dry bus.`,
     });
   }
 
@@ -618,6 +675,15 @@ export function planSession(diag, settings) {
     });
   } else {
     if (lowEndProtected) sat = Math.min(sat, 0.05);
+    // Glue packs low-mids — ease ratio when mud is the complaint
+    if (actions.has('cut_mud')) {
+      glue = {
+        ...glue,
+        ratio: 1 + (glue.ratio - 1) * (0.7 - 0.15 * mudSev),
+        threshold: glue.threshold - 1.5,
+      };
+      sat = Math.min(sat, lowEndProtected ? 0.035 : 0.07);
+    }
     log.push({
       type: 'decision',
       text: `Decision: Intensity ${scale.label} → glue ${glue.ratio.toFixed(2)}:1 @ ${glue.threshold} dB, sat ${(sat * 100).toFixed(0)}% (polish).`,
@@ -692,11 +758,25 @@ export function planSession(diag, settings) {
     text: `Decision: polish path — EQ capped ±${scale.polishCap} dB, light FR refine (${(scale.refineMul * 100).toFixed(0)}%).`,
   });
 
+  // Lean spectrum target lowMid when muddy so residual polish doesn't re-boost haze
+  let spectrumTarget = { ...(refProfile?.regions || pb.spectrum) };
+  if (actions.has('cut_mud')) {
+    spectrumTarget = {
+      ...spectrumTarget,
+      lowMid: spectrumTarget.lowMid * (0.82 - 0.1 * mudSev),
+    };
+    let sum = 0;
+    for (const k of Object.keys(spectrumTarget)) sum += spectrumTarget[k];
+    for (const k of Object.keys(spectrumTarget)) spectrumTarget[k] /= sum;
+  }
+
   return {
     role: pb.role,
     priorities: pb.priorities,
     room,
     refProfile,
+    refFromMemory: Boolean(refFromMemory),
+    liveRefProfiles,
     intensity: scale,
     eq,
     kickBass,
@@ -713,8 +793,10 @@ export function planSession(diag, settings) {
     exciter,
     protectDynamics: protect,
     protectLowEnd: lowEndProtected,
-    spectrumTarget: refProfile?.regions || pb.spectrum,
-    refineMul: scale.refineMul * (lowEndProtected ? 0.7 : 1),
+    cutMud: actions.has('cut_mud'),
+    mudSeverity: mudSev,
+    spectrumTarget,
+    refineMul: scale.refineMul * (lowEndProtected ? 0.7 : 1) * (actions.has('cut_mud') ? 0.85 : 1),
     skipHeavyRemould: true,
     peak: {
       softClip,

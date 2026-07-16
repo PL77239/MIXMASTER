@@ -77,7 +77,14 @@ export async function parallelCompress(inputBuffer, spec) {
   const mix = clamp(spec?.mix ?? 0, 0, 0.55);
   if (mix < 0.02) return inputBuffer;
 
+  // Optional HPF on wet path — keeps NY density out of the mud band (250–500 Hz)
+  const wetHpHz = spec.wetHpHz || 0;
+
   const wet = await renderGraph(inputBuffer, (ctx, source) => {
+    const nodes = [source];
+    if (wetHpHz >= 120) {
+      nodes.push(highpass(ctx, wetHpHz), highpass(ctx, wetHpHz));
+    }
     const c1 = compressor(ctx, {
       threshold: spec.threshold ?? -28,
       ratio: spec.ratio ?? 4,
@@ -93,7 +100,8 @@ export async function parallelCompress(inputBuffer, spec) {
       knee: 6,
     });
     const makeup = gainNode(ctx, dbToLin(spec.makeupDb ?? 4));
-    return chain([source, c1, c2, makeup]);
+    nodes.push(c1, c2, makeup);
+    return chain(nodes);
   });
 
   const dry = getChannelArrays(inputBuffer);

@@ -239,6 +239,13 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
       if (g < 0) g *= 0.25;
       else g *= 0.15; // almost never add more bass into the peak chain
     }
+    // Anti-mud: never re-boost lowMid after density stages; prefer residual cuts
+    if (s.key === 'lowMid') {
+      if (plan.cutMud || cur > (tgt.lowMid || 0.18) * 1.05) {
+        if (g > 0) g = 0;
+        else g *= plan.cutMud ? 1.35 : 1.15;
+      }
+    }
     g = clamp(g, -s.max, s.max);
     if (Math.abs(g) < 0.35) continue;
     refine.push({

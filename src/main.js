@@ -16,6 +16,11 @@ import {
   scrollGoHome,
   scrollGoTo,
 } from './ui/scrollMotion.js';
+import {
+  rememberReference,
+  memoryCount,
+  clearMemories,
+} from './audio/refMemory.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -167,15 +172,23 @@ function bindRooms() {
 // ---------- references ----------
 function updateRefHint() {
   const n = state.references.length;
+  const mem = memoryCount();
   $('refClearBtn').classList.toggle('hidden', n === 0);
+  const forgetBtn = $('refForgetBtn');
+  if (forgetBtn) forgetBtn.classList.toggle('hidden', mem === 0);
   if (!n) {
-    $('refHint').textContent = 'Analyzed first, then your track is pulled toward them. Prefer lossless WAV/FLAC.';
+    $('refHint').textContent = mem
+      ? `No refs this session · ${mem} learned profile${mem === 1 ? '' : 's'} ready for similar tracks. Prefer lossless WAV/FLAC.`
+      : 'Upload or paste a reference — MIXA learns it for similar future masters. Prefer lossless WAV/FLAC.';
     return;
   }
-  $('refHint').textContent = state.references.map((r) => {
+  const listed = state.references.map((r) => {
     const q = r.quality ? ` [${qualityBadge(r.quality)}]` : '';
     return `${r.name}${q}`;
   }).join(' · ');
+  $('refHint').textContent = mem
+    ? `${listed} · +${mem} learned`
+    : listed;
 }
 
 async function handleRefs(fileList) {
@@ -248,6 +261,14 @@ function bindRefs() {
     state.references = [];
     updateRefHint();
   });
+  const forgetBtn = $('refForgetBtn');
+  if (forgetBtn) {
+    forgetBtn.addEventListener('click', () => {
+      clearMemories();
+      updateRefHint();
+      toast('Forgotten learned references.');
+    });
+  }
   $('refUrlBtn').addEventListener('click', handleRefUrl);
   $('refUrlInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); handleRefUrl(); }
@@ -455,7 +476,7 @@ function renderNotes(result) {
 
   const roomLabel = plan?.room?.label || settings.room || 'Studio';
   const refLine = plan?.refProfile
-    ? `<li>Matched toward: <b>${plan.refProfile.name}</b> (${plan.refProfile.lufs.toFixed(1)} LUFS)</li>`
+    ? `<li>Matched toward: <b>${plan.refProfile.name}</b> (${plan.refProfile.lufs.toFixed(1)} LUFS)${plan.refFromMemory ? ' · from memory' : ''}</li>`
     : '<li>No reference tracks — genre polish only</li>';
 
   $('analysisNotes').innerHTML = `
@@ -534,8 +555,22 @@ async function runProcess() {
     setProgress(1, 'Master ready.');
     await new Promise((r) => setTimeout(r, 250));
     $('progressCard').classList.add('hidden');
+
+    // Learn from live references for similar future uploads
+    if (result.plan?.liveRefProfiles?.length) {
+      for (const profile of result.plan.liveRefProfiles) {
+        rememberReference({
+          profile,
+          genre: settings.genre,
+          plan: result.plan,
+        });
+      }
+      updateRefHint();
+      toast(`Master complete — learned ${result.plan.liveRefProfiles.length} reference(s) for similar tracks.`);
+    } else {
+      toast('Master complete — have a listen.');
+    }
     showResults(result);
-    toast('Master complete — have a listen.');
   } catch (err) {
     console.error(err);
     toast('Processing failed: ' + (err.message || err), true);

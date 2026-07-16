@@ -168,11 +168,12 @@ export function diagnose(channels, sampleRate, analysis, genreKey) {
       action: 'boost_upper_bass',
     });
   }
-  if (regions.lowMid > pb.checks.maxLowMid) {
+  // Trigger a hair earlier — density stages (glue/parallel/MB) refill this band
+  if (regions.lowMid > pb.checks.maxLowMid * 0.92) {
     findings.push({
       id: 'mud',
-      severity: clamp((regions.lowMid - pb.checks.maxLowMid) / 0.1, 0.4, 1),
-      note: `Low-mid haze at 250–500 Hz (${(regions.lowMid * 100).toFixed(0)}%). Classic masking zone — cut before boosting anything else.`,
+      severity: clamp((regions.lowMid - pb.checks.maxLowMid * 0.85) / 0.1, 0.35, 1),
+      note: `Low-mid haze at 250–500 Hz (${(regions.lowMid * 100).toFixed(0)}%). Classic masking zone — cut before density / boost moves.`,
       action: 'cut_mud',
     });
   } else if (regions.lowMid < pb.spectrum.lowMid * 0.55) {
