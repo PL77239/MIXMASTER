@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="MIXMASTER LA — a client-side AI mix & mastering studio. Upload WAV, FLAC or MP3 and get a genre-aware, -14 LUFS master, processed entirely in your browser."
+    />
+    <title>MIXMASTER LA · AI Mix &amp; Master Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="sky"></div>
+    <div class="sun"></div>
+    <div class="grid-floor"></div>
+    <div class="skyline" aria-hidden="true"></div>
+    <div class="palms" aria-hidden="true">
+      <div class="palm palm--left"></div>
+      <div class="palm palm--right"></div>
+    </div>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand__mark">◈</span>
+        <span class="brand__name">MIXMASTER</span>
+        <span class="brand__la">LA</span>
+      </div>
+      <nav class="topbar__meta">
+        <span class="pill pill--live"><i></i> Studio online</span>
+        <span class="pill">100% in-browser</span>
+      </nav>
+    </header>
+
+    <main class="stage">
+      <section class="hero">
+        <p class="hero__eyebrow">Sunset Blvd · Analog warmth · Digital precision</p>
+        <h1 class="hero__title">
+          Your track,<br /><span>mastered for the world.</span>
+        </h1>
+        <p class="hero__sub">
+          Upload a <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. Our engine analyzes your
+          bass, drums, vocals and instrumental balance, sculpts the frequencies to
+          your genre, and delivers a streaming-ready master at
+          <b>&minus;14&nbsp;LUFS</b> — returned in the exact format you gave us.
+        </p>
+        <div class="hero__stats">
+          <div><b>ITU-R BS.1770-4</b><span>Loudness metering</span></div>
+          <div><b>4-band</b><span>Stem-aware dynamics</span></div>
+          <div><b>&minus;1 dBTP</b><span>True-peak ceiling</span></div>
+        </div>
+      </section>
+
+      <!-- STEP 1: UPLOAD -->
+      <section class="card drop" id="dropCard">
+        <div class="card__glow"></div>
+        <div class="step">01 — Load your record</div>
+        <div class="dropzone" id="dropzone" tabindex="0" role="button"
+             aria-label="Upload an audio file">
+          <div class="dropzone__inner">
+            <div class="dropzone__icon">♪</div>
+            <p class="dropzone__title">Drop your audio here</p>
+            <p class="dropzone__hint">or click to browse — WAV · FLAC · MP3 · up to ~10&nbsp;min</p>
+            <button class="btn btn--ghost" type="button" id="browseBtn">Choose file</button>
+          </div>
+          <input type="file" id="fileInput" accept=".wav,.flac,.mp3,audio/wav,audio/flac,audio/mpeg" hidden />
+        </div>
+        <div class="filecard hidden" id="fileCard">
+          <div class="filecard__icon" id="fileFormat">WAV</div>
+          <div class="filecard__meta">
+            <div class="filecard__name" id="fileName">track.wav</div>
+            <div class="filecard__sub" id="fileSub">—</div>
+          </div>
+          <button class="btn btn--ghost btn--sm" id="clearBtn" type="button">Replace</button>
+        </div>
+      </section>
+
+      <!-- STEP 2: DIRECTION -->
+      <section class="card" id="controlsCard">
+        <div class="step">02 — Set the direction</div>
+
+        <div class="ctl">
+          <label class="ctl__label">Genre &amp; standard</label>
+          <div class="genre-grid" id="genreGrid"></div>
+        </div>
+
+        <div class="ctl-row">
+          <div class="ctl">
+            <label class="ctl__label" for="targetLufs">Target loudness</label>
+            <select class="select" id="targetLufs">
+              <option value="-14" selected>Streaming · &minus;14 LUFS (Spotify / YouTube / Tidal)</option>
+              <option value="-16">Apple / Podcast · &minus;16 LUFS</option>
+              <option value="-9">Club / Loud · &minus;9 LUFS</option>
+              <option value="-23">Broadcast · &minus;23 LUFS (EBU R128)</option>
+            </select>
+          </div>
+          <div class="ctl">
+            <label class="ctl__label" for="dynamics">Dynamics profile</label>
+            <select class="select" id="dynamics">
+              <option value="open">Open &amp; dynamic</option>
+              <option value="balanced" selected>Balanced</option>
+              <option value="punchy">Loud &amp; punchy</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="sliders">
+          <div class="slider">
+            <label>Warmth <output id="warmthOut">0</output></label>
+            <input type="range" id="warmth" min="-6" max="6" step="0.5" value="0" />
+          </div>
+          <div class="slider">
+            <label>Brightness / Air <output id="brightOut">0</output></label>
+            <input type="range" id="brightness" min="-6" max="6" step="0.5" value="0" />
+          </div>
+          <div class="slider">
+            <label>Bass weight <output id="bassOut">0</output></label>
+            <input type="range" id="bass" min="-6" max="6" step="0.5" value="0" />
+          </div>
+          <div class="slider">
+            <label>Vocal presence <output id="vocalOut">0</output></label>
+            <input type="range" id="vocal" min="-6" max="6" step="0.5" value="0" />
+          </div>
+          <div class="slider">
+            <label>Stereo width <output id="widthOut">100</output>%</label>
+            <input type="range" id="width" min="60" max="160" step="5" value="100" />
+          </div>
+        </div>
+
+        <button class="btn btn--primary btn--block" id="processBtn" type="button" disabled>
+          <span class="btn__label">Master my track</span>
+        </button>
+      </section>
+
+      <!-- PROGRESS -->
+      <section class="card progress-card hidden" id="progressCard">
+        <div class="step">Working the console…</div>
+        <div class="progress">
+          <div class="progress__bar" id="progressBar"></div>
+        </div>
+        <div class="progress__stage" id="progressStage">Warming up the tubes…</div>
+      </section>
+
+      <!-- STEP 3: RESULT -->
+      <section class="card result hidden" id="resultCard">
+        <div class="step">03 — Your master</div>
+
+        <div class="ab">
+          <div class="ab__toggle" role="tablist">
+            <button class="ab__btn is-active" id="abOriginal" role="tab">Original</button>
+            <button class="ab__btn" id="abMastered" role="tab">Mastered</button>
+          </div>
+          <div class="transport">
+            <button class="btn btn--round" id="playBtn" aria-label="Play / pause">▶</button>
+            <div class="scrub"><div class="scrub__fill" id="scrubFill"></div></div>
+            <span class="time" id="timeLabel">0:00 / 0:00</span>
+          </div>
+        </div>
+
+        <canvas class="viz" id="waveCanvas" height="150"></canvas>
+        <canvas class="viz viz--spectrum" id="spectrumCanvas" height="120"></canvas>
+
+        <div class="meters" id="meters"></div>
+
+        <div class="analysis" id="analysisNotes"></div>
+
+        <button class="btn btn--primary btn--block" id="downloadBtn" type="button">
+          <span class="btn__label">Download master</span>
+        </button>
+        <p class="result__note" id="downloadNote"></p>
+      </section>
+
+      <footer class="footnote">
+        <p>
+          MIXMASTER LA runs entirely on your device — your audio never leaves the
+          browser. Built with the Web Audio API, an ITU-R BS.1770 loudness engine,
+          and true-peak limiting. Made with sunshine in Los Angeles.
+        </p>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
