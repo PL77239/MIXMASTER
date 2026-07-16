@@ -67,20 +67,16 @@ export function initLogo3d() {
 
   const updateSticky = () => {
     if (!root) return;
-    const hero = document.querySelector('.desk-top');
-    const heroBottom = hero
-      ? hero.getBoundingClientRect().bottom + window.scrollY
-      : window.innerHeight;
-    const start = Math.max(120, heroBottom * 0.35);
-    const t = Math.min(1, Math.max(0, window.scrollY / start));
-    const scale = 1 - t * 0.72;
-    const top = Math.max(12, window.innerHeight * 0.42 - window.scrollY * 0.55);
-    stickyActive = t > 0.92;
+    // Corner mark stays top-left; slight shrink on scroll
+    const t = Math.min(1, Math.max(0, window.scrollY / 420));
+    const scale = 1 - t * 0.18;
+    stickyActive = true;
 
     root.style.setProperty('--logo-scale', scale.toFixed(4));
-    root.style.setProperty('--logo-top', `${top.toFixed(1)}px`);
-    root.classList.toggle('is-docked', stickyActive);
-    root.style.pointerEvents = stickyActive ? 'auto' : 'none';
+    root.style.setProperty('--logo-top', '14px');
+    root.style.setProperty('--logo-left', 'clamp(14px, 3vw, 28px)');
+    root.classList.toggle('is-docked', window.scrollY > 40);
+    root.style.pointerEvents = 'auto';
   };
 
   const onScroll = () => {
@@ -280,8 +276,9 @@ export function initLogo3d() {
   });
 
   root.addEventListener('click', () => {
-    if (!stickyActive) return;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const home = document.getElementById('brandHome');
+    if (home) home.click();
+    else window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
   // Always keep a gentle spin while on-screen (even without scroll)

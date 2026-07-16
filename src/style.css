@@ -150,29 +150,29 @@ body.is-touch .cursor-glide { display: none !important; }
   .cursor { display: none; }
 }
 
-/* ---------- 3D logo (pxpush-style) ---------- */
+/* ---------- 3D logo (pxpush-style) — top-left ---------- */
 .logo3d {
   --logo-scale: 1;
-  --logo-top: 48vh;
+  --logo-top: 14px;
+  --logo-left: clamp(14px, 3vw, 28px);
   position: fixed;
-  left: 50%;
+  left: var(--logo-left);
   top: var(--logo-top);
-  width: min(72vw, 560px);
-  height: min(32vh, 300px);
+  width: min(22vw, 168px);
   aspect-ratio: 200 / 110;
   height: auto;
-  max-height: min(34vh, 310px);
-  transform: translate(-50%, -50%) scale(var(--logo-scale));
-  transform-origin: 50% 0%;
-  z-index: 12;
-  pointer-events: none;
+  max-height: 92px;
+  transform: scale(var(--logo-scale));
+  transform-origin: 0 0;
+  z-index: 24;
+  pointer-events: auto;
+  cursor: pointer;
   opacity: 0;
   transition: opacity 0.5s ease;
 }
 .logo3d.is-ready { opacity: 1; }
 .logo3d.is-docked {
-  z-index: 22;
-  cursor: pointer;
+  z-index: 24;
 }
 .logo3d.is-fallback {
   opacity: 0.55;
@@ -182,7 +182,7 @@ body.is-touch .cursor-glide { display: none !important; }
 .logo3d.is-fallback .logo3d__canvas { display: none; }
 .logo3d.is-fallback .logo3d__fallback {
   display: block;
-  font-size: clamp(48px, 10vw, 96px);
+  font-size: clamp(28px, 6vw, 48px);
   color: #eceae4;
   line-height: 1;
 }
@@ -195,8 +195,22 @@ body.is-touch .cursor-glide { display: none !important; }
 }
 @media screen and (max-width: 700px) {
   .logo3d {
-    width: 84vw;
-    top: 40vh;
+    width: min(42vw, 140px);
+    --logo-top: 12px;
+    --logo-left: 12px;
+  }
+}
+
+/* Text brand sits beside the 3D mark */
+body:has(.logo3d.is-ready) .brand {
+  padding-left: min(24vw, 180px);
+}
+@media screen and (max-width: 700px) {
+  body:has(.logo3d.is-ready) .brand {
+    padding-left: min(46vw, 152px);
+  }
+  body:has(.logo3d.is-ready) .brand__name {
+    display: none;
   }
 }
 
