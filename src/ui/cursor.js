@@ -2,12 +2,56 @@
  * PX Push–style tile cursor field.
  * Full-viewport grid; cells light under the pointer and fade (ttl).
  * Soft ring still glides as a secondary pointer.
+ *
+ * Tiles are muted over media / transport / form controls.
  */
 
 const lerp = (a, b, t) => a + (b - a) * t;
 
-const SKIP_SELECTOR =
-  '.cursor_disabled, .hover_effect, a, button, .genre, .room-btn, .ab__btn, .dropzone, .scrub, input, select, label, [role="button"], [role="tab"]';
+/** Zones where tile paint must not appear */
+const SKIP_SELECTOR = [
+  '.cursor_disabled',
+  '.hover_effect',
+  '.viz',
+  '.viz-stack',
+  '.transport',
+  '.scrub',
+  '.progress',
+  '.progress-card',
+  '.progress__bar',
+  '.progress__stage',
+  '.meters',
+  '.meter',
+  '.analysis',
+  '.result-media',
+  '.ab',
+  '.ab__toggle',
+  '.listen-room',
+  '.filecard',
+  '.sliders',
+  '.ctl',
+  'a',
+  'button',
+  'canvas',
+  'input',
+  'select',
+  'textarea',
+  'label',
+  '.genre',
+  '.room-btn',
+  '.ab__btn',
+  '.dropzone',
+  '.btn',
+  '#playBtn',
+  '#waveCanvas',
+  '#spectrumCanvas',
+  '#scrubFill',
+  '#progressBar',
+  '[role="button"]',
+  '[role="tab"]',
+  '[role="tablist"]',
+  '[role="group"]',
+].join(', ');
 
 export function initCursor() {
   const root = document.getElementById('cursor');
@@ -22,24 +66,52 @@ export function initCursor() {
     return;
   }
 
-  const ttl = parseFloat(root.getAttribute('data-ttl') || '0.22') * 1000;
+  const ttl = parseFloat(root.getAttribute('data-ttl') || '0.18') * 1000;
   const mouse = { x: -999, y: -999 };
   const pos = { x: -999, y: -999 };
-  let columns = 20;
+  let columns = 16;
   let cellSize = 0;
   let cells = [];
   let cachedIndex = -1;
   let raf = 0;
+  let running = false;
+  let muted = false;
+  let resizeTimer = 0;
+  let layoutPending = false;
   const fadeTimers = new WeakMap();
 
+  const isSkipTarget = (node) => Boolean(node?.closest?.(SKIP_SELECTOR));
+
+  const clearLit = () => {
+    for (const el of cells) {
+      if (el.classList.contains('is-lit')) el.classList.remove('is-lit');
+      const t = fadeTimers.get(el);
+      if (t) {
+        clearTimeout(t);
+        fadeTimers.delete(el);
+      }
+    }
+    cachedIndex = -1;
+  };
+
+  const setMuted = (next) => {
+    if (muted === next) return;
+    muted = next;
+    root.classList.toggle('is-muted', muted);
+    if (muted) clearLit();
+  };
+
   const layout = () => {
-    const colsAttr = getComputedStyle(root).getPropertyValue('--columns').trim();
-    columns = Math.max(8, parseInt(colsAttr, 10) || 20);
-    cellSize = window.innerWidth / columns;
+    layoutPending = false;
+    const w = window.innerWidth;
+    columns = w < 900 ? 12 : w < 1200 ? 14 : 16;
+    cellSize = w / columns;
     const rows = Math.ceil(window.innerHeight / cellSize) + 1;
     const total = rows * columns;
     root.style.setProperty('--columns', String(columns));
     root.style.setProperty('--size', `${cellSize}px`);
+
+    if (cells.length === total) return;
 
     const frag = document.createDocumentFragment();
     for (let i = 0; i < total; i++) {
@@ -49,8 +121,15 @@ export function initCursor() {
     }
     inner.innerHTML = '';
     inner.appendChild(frag);
-    cells = [...inner.children];
+    cells = inner.children;
     cachedIndex = -1;
+  };
+
+  const scheduleLayout = () => {
+    if (layoutPending) return;
+    layoutPending = true;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(layout, 140);
   };
 
   const cellAt = (x, y) => {
@@ -63,7 +142,7 @@ export function initCursor() {
   };
 
   const paint = (el) => {
-    if (!el) return;
+    if (!el || muted) return;
     el.classList.add('is-lit');
     const prev = fadeTimers.get(el);
     if (prev) clearTimeout(prev);
@@ -76,16 +155,30 @@ export function initCursor() {
     );
   };
 
+  const kickGlide = () => {
+    if (running || document.hidden) return;
+    running = true;
+    raf = requestAnimationFrame(tick);
+  };
+
   const onMove = (e) => {
     mouse.x = e.clientX;
     mouse.y = e.clientY;
     root.classList.add('is-on');
-    if (glide) glide.classList.add('is-on');
+    glide?.classList.add('is-on');
+    kickGlide();
 
-    if (e.target?.closest?.(SKIP_SELECTOR)) {
-      cachedIndex = -1;
-      return;
+    let overSkip = isSkipTarget(e.target);
+    if (!overSkip) {
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      overSkip = isSkipTarget(under);
     }
+
+    setMuted(overSkip);
+    glide?.classList.toggle('is-hover', overSkip);
+
+    if (overSkip) return;
+
     const hit = cellAt(e.clientX, e.clientY);
     if (!hit || hit.idx === cachedIndex) return;
     cachedIndex = hit.idx;
@@ -93,46 +186,53 @@ export function initCursor() {
   };
 
   const tick = () => {
-    pos.x = lerp(pos.x, mouse.x, 0.2);
-    pos.y = lerp(pos.y, mouse.y, 0.2);
+    if (document.hidden) {
+      running = false;
+      raf = 0;
+      return;
+    }
+
+    pos.x = lerp(pos.x, mouse.x, 0.22);
+    pos.y = lerp(pos.y, mouse.y, 0.22);
     if (glide) {
       glide.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+    }
+
+    const dx = Math.abs(pos.x - mouse.x);
+    const dy = Math.abs(pos.y - mouse.y);
+    if (dx < 0.15 && dy < 0.15) {
+      running = false;
+      raf = 0;
+      return;
     }
     raf = requestAnimationFrame(tick);
   };
 
-  const onOver = (e) => {
-    const hovering = Boolean(e.target?.closest?.(SKIP_SELECTOR));
-    glide?.classList.toggle('is-hover', hovering);
-  };
-
   layout();
-  window.addEventListener('resize', layout);
+  window.addEventListener('resize', scheduleLayout, { passive: true });
   window.addEventListener('pointermove', onMove, { passive: true });
-  window.addEventListener('mousemove', onMove, { passive: true });
-  document.addEventListener('pointerover', onOver, { passive: true });
   window.addEventListener('pointerdown', () => glide?.classList.add('is-down'));
   window.addEventListener('pointerup', () => glide?.classList.remove('is-down'));
   window.addEventListener('mouseleave', () => {
     root.classList.remove('is-on');
     glide?.classList.remove('is-on');
+    clearLit();
   });
 
-  // Magnetic nudge on primary controls
-  document.querySelectorAll('.btn--primary, .brand, .hero__brand').forEach((el) => {
-    el.addEventListener('pointermove', (e) => {
-      const r = el.getBoundingClientRect();
-      mouse.x = lerp(e.clientX, r.left + r.width / 2, 0.1);
-      mouse.y = lerp(e.clientY, r.top + r.height / 2, 0.1);
-    });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearLit();
+      if (raf) cancelAnimationFrame(raf);
+      running = false;
+      raf = 0;
+    }
   });
 
-  raf = requestAnimationFrame(tick);
-
-  // Hold-to-skim marquee
+  // Hold-to-skim marquee (hero only)
   const marquee = document.querySelector('.hero__marquee-track');
   if (marquee) {
-    document.querySelector('.hero')?.addEventListener('pointerdown', () => {
+    const hero = document.querySelector('.hero');
+    hero?.addEventListener('pointerdown', () => {
       marquee.style.animationDuration = '8s';
     });
     window.addEventListener('pointerup', () => {
@@ -141,8 +241,9 @@ export function initCursor() {
   }
 
   return () => {
-    cancelAnimationFrame(raf);
-    window.removeEventListener('resize', layout);
+    if (raf) cancelAnimationFrame(raf);
+    window.removeEventListener('resize', scheduleLayout);
+    window.removeEventListener('pointermove', onMove);
   };
 }
 

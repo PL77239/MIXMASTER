@@ -564,11 +564,15 @@ function bindResultControls() {
   });
 }
 
+let resizeDrawTimer = 0;
 window.addEventListener('resize', () => {
-  if (state.result) {
-    drawCurrentWave();
-    drawSpectrum($('spectrumCanvas'), state.result.before, state.result.after);
-  }
+  clearTimeout(resizeDrawTimer);
+  resizeDrawTimer = setTimeout(() => {
+    if (state.result) {
+      drawCurrentWave();
+      drawSpectrum($('spectrumCanvas'), state.result.before, state.result.after);
+    }
+  }, 120);
 });
 
 // ---------- init ----------
