@@ -236,6 +236,8 @@ body:has(.logo3d.is-ready) .brand {
   z-index: 0;
   overflow: hidden;
   color: #000;
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
 }
 .tidewave[hidden] { display: none !important; }
 .tidewave__wash {
@@ -384,6 +386,7 @@ body.has-tidewave .btn--primary:hover {
   color: var(--band-fg);
   background: var(--band-bg, var(--paper));
   overflow: clip;
+  transform-origin: 50% 0%;
 }
 .band__frame {
   max-width: 1120px;
@@ -1171,6 +1174,34 @@ input[type="range"]::-moz-range-thumb {
   transform: none;
 }
 
+/* Nº002+ bands expand as they enter */
+.band.reveal {
+  opacity: 0;
+  transform: translateY(56px) scale(0.94);
+  clip-path: inset(10% 3% 10% 3%);
+  transition:
+    opacity 0.85s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.95s cubic-bezier(0.16, 1, 0.3, 1),
+    clip-path 0.95s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.band.reveal.is-in {
+  opacity: 1;
+  transform: none;
+  clip-path: inset(0 0 0 0);
+}
+
+.band [data-expand] {
+  opacity: 0;
+  transform: translateY(28px) scale(0.98);
+  transition:
+    opacity 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) var(--expand-delay, 0ms),
+    transform 0.75s cubic-bezier(0.16, 1, 0.3, 1) var(--expand-delay, 0ms);
+}
+.band [data-expand].is-in {
+  opacity: 1;
+  transform: none;
+}
+
 @media (max-width: 720px) {
   .ctl-row { grid-template-columns: 1fr; }
   .topbar__meta .meta-line--dim { display: none; }
@@ -1185,7 +1216,14 @@ input[type="range"]::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .hero__marquee-track,
   .band__marquee-track { animation: none; }
-  .reveal { opacity: 1; transform: none; transition: none; }
+  .reveal,
+  .band.reveal,
+  .band [data-expand] {
+    opacity: 1;
+    transform: none;
+    clip-path: none;
+    transition: none;
+  }
   .cursor__ring, .cursor__dot { transition: none; }
   .logo3d { transition: none; }
 }

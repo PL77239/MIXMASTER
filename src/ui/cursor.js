@@ -255,16 +255,30 @@ export function initReveals() {
     nodes.forEach((n) => n.classList.add('is-in'));
     return;
   }
+
   const io = new IntersectionObserver(
     (entries) => {
       for (const e of entries) {
-        if (e.isIntersecting) {
-          e.target.classList.add('is-in');
-          io.unobserve(e.target);
+        if (!e.isIntersecting) continue;
+        const el = e.target;
+        if (el.classList.contains('band')) {
+          el.querySelectorAll('[data-expand]').forEach((child, i) => {
+            child.style.setProperty('--expand-delay', `${90 + i * 90}ms`);
+          });
         }
+        // next frame so delays apply before transition starts
+        requestAnimationFrame(() => {
+          el.classList.add('is-in');
+          if (el.classList.contains('band')) {
+            el.querySelectorAll('[data-expand]').forEach((child) => {
+              child.classList.add('is-in');
+            });
+          }
+        });
+        io.unobserve(el);
       }
     },
-    { rootMargin: '0px 0px -8% 0px', threshold: 0.12 }
+    { rootMargin: '0px 0px -12% 0px', threshold: 0.14 }
   );
   nodes.forEach((n) => io.observe(n));
 }
