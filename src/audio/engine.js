@@ -273,9 +273,12 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   const fs = buf.sampleRate;
   const base = getChannelArrays(buf);
   const baseLufs = measureLoudness(base.map((c) => c), fs).integrated;
-  // Bass/808: wider TP margin — sample limiting alone does not stop intersample overs
-  const tpMargin = peak.tpMarginDb ?? (plan.protectLowEnd ? 2.0 : 1.2);
+  // Genre peak style drives soft-clip — bass desks prefer transparent limit
+  const tpMargin = peak.tpMarginDb ?? (plan.protectLowEnd ? 1.45 : 1.15);
   const ceilingDb = peak.ceilingDb ?? -1.0;
+  const useSoftClip = Boolean(peak.softClip);
+  const softClipDb = peak.softClipDb ?? -0.5;
+  const softClipAmount = peak.softClipAmount ?? (plan.protectLowEnd ? 0.28 : 0.38);
   let gainDb = clamp(peak.targetLufs - baseLufs, -18, 14);
   // Don't ask for more makeup than peak headroom allows (bass-heavy redline fix)
   gainDb = Math.min(gainDb, maxSafeGainDb(base, ceilingDb, tpMargin));
@@ -285,20 +288,21 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   for (let iter = 0; iter < 5; iter++) {
     const polished = peakPolish(base, fs, {
       gainDb,
-      softClip: true, // always soft-clip before limit for delivery safety
-      softClipDb: peak.softClipDb ?? (plan.protectLowEnd ? -1.2 : -0.7),
+      softClip: useSoftClip,
+      softClipDb,
+      softClipAmount,
       ceilingDb,
       tpMarginDb: tpMargin,
-      releaseMs: plan.protectDynamics || plan.protectLowEnd ? 180 : 120,
+      releaseMs: plan.protectDynamics || plan.protectLowEnd ? 150 : 110,
       enforce: true,
     });
     limited = polished.channels;
     appliedGain = polished.appliedGainDb;
 
-    const { over, truePeakDb: tp } = exceedsTruePeak(limited, fs, ceilingDb, 0.02);
+    const { over, truePeakDb: tp } = exceedsTruePeak(limited, fs, ceilingDb, 0.05);
     if (over) {
-      // Back off makeup — never chase LUFS into a redline
-      gainDb = clamp(gainDb - Math.max(0.5, (tp - ceilingDb) * 1.4), -18, appliedGain - 0.25);
+      // Back off makeup — never chase LUFS into a redline (no second soft-clip rack)
+      gainDb = clamp(gainDb - Math.max(0.35, (tp - ceilingDb) * 1.15), -18, appliedGain - 0.2);
       continue;
     }
 
@@ -307,23 +311,22 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
     if (Math.abs(err) < 0.4) break;
     // Only nudge louder when we still have TP headroom
     const headroom = ceilingDb - (Number.isFinite(tp) ? tp : ceilingDb);
-    if (err > 0 && headroom < 0.35) break;
+    if (err > 0 && headroom < 0.4) break;
     const next = clamp(gainDb + err * 0.55, -18, 14);
     gainDb = Math.min(next, maxSafeGainDb(base, ceilingDb, tpMargin));
     await yieldFrame();
   }
 
-  // Absolute delivery gate — ceiling wins over loudness
+  // Delivery gate — trim + limit only (never a second soft-clip pass)
   {
-    const check = exceedsTruePeak(limited, fs, ceilingDb, 0.01);
-    if (check.over || (plan.protectLowEnd && Number.isFinite(check.truePeakDb) && check.truePeakDb > ceilingDb - 0.05)) {
+    const check = exceedsTruePeak(limited, fs, ceilingDb, 0.05);
+    if (check.over) {
       const polished = peakPolish(base, fs, {
-        gainDb: Math.min(appliedGain, gainDb) - Math.max(0.35, (check.truePeakDb - ceilingDb) + 0.35),
-        softClip: true,
-        softClipDb: Math.min(-1.3, ceilingDb - 0.35),
+        gainDb: Math.min(appliedGain, gainDb) - Math.max(0.25, (check.truePeakDb - ceilingDb) + 0.2),
+        softClip: false,
         ceilingDb,
-        tpMarginDb: Math.max(tpMargin, 2.2),
-        releaseMs: 200,
+        tpMarginDb: Math.min(Math.max(tpMargin, 1.35), 1.7),
+        releaseMs: 160,
         enforce: true,
       });
       limited = polished.channels;

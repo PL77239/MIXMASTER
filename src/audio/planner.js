@@ -526,38 +526,42 @@ export function planSession(diag, settings) {
   };
   let sat = clamp(t.sat * scale.satMul, 0, 0.12);
 
+  // Bass / dembow desks: keep density stages light — peak chain must stay transparent
+  const stageMul = lowEndProtected ? 0.45 : 1;
+
   // Multiband (Maztr rock/EDM, Digital Natural Sound) — gentle per-band control
   let multiband = null;
-  if (scale.mbMul >= 0.18 && !protect) {
-    const lowRatio = 1 + 0.55 * scale.mbMul * (lowEndProtected ? 0.55 : 1);
-    const midRatio = 1 + 0.85 * scale.mbMul;
-    const highRatio = 1 + 0.65 * scale.mbMul;
+  const mbMul = scale.mbMul * stageMul;
+  if (mbMul >= 0.18 && !protect) {
+    const lowRatio = 1 + 0.55 * mbMul * (lowEndProtected ? 0.4 : 1);
+    const midRatio = 1 + 0.85 * mbMul;
+    const highRatio = 1 + 0.65 * mbMul;
     multiband = {
       enabled: true,
-      lowHz: lowEndProtected ? 160 : 190,
+      lowHz: lowEndProtected ? 150 : 190,
       highHz: 4200,
       low: {
         threshold: -24,
-        ratio: clamp(lowRatio, 1.1, 1.9),
-        attack: 0.025,
-        release: 0.22,
-        makeupDb: 0.35 * scale.mbMul,
+        ratio: clamp(lowRatio, 1.08, 1.6),
+        attack: 0.03,
+        release: 0.24,
+        makeupDb: 0.25 * mbMul,
         knee: 12,
       },
       mid: {
         threshold: -20,
-        ratio: clamp(midRatio, 1.15, 2.2),
-        attack: 0.018,
+        ratio: clamp(midRatio, 1.12, 1.9),
+        attack: 0.02,
         release: 0.18,
-        makeupDb: 0.45 * scale.mbMul,
+        makeupDb: 0.35 * mbMul,
         knee: 10,
       },
       high: {
         threshold: -18,
-        ratio: clamp(highRatio, 1.1, 1.85),
-        attack: 0.008,
+        ratio: clamp(highRatio, 1.08, 1.7),
+        attack: 0.01,
         release: 0.14,
-        makeupDb: 0.3 * scale.mbMul,
+        makeupDb: 0.22 * mbMul,
         knee: 8,
       },
     };
@@ -567,17 +571,17 @@ export function planSession(diag, settings) {
     });
   }
 
-  // Parallel NY compression (iZotope / Mixing on the Box / Maztr hip-hop & jazz)
+  // Parallel NY compression — light on protect-low-end (latin/hiphop/EDM)
   let parallel = null;
-  const parallelMix = clamp(0.22 * scale.parallelMul, 0, 0.42);
+  const parallelMix = clamp(0.22 * scale.parallelMul * stageMul, 0, lowEndProtected ? 0.18 : 0.42);
   if (parallelMix >= 0.04 && !protect) {
     parallel = {
       mix: parallelMix,
       threshold: -30,
-      ratio: 3.5 + scale.parallelMul * 1.5,
-      attack: 0.003,
-      release: 0.15,
-      makeupDb: 3.5,
+      ratio: 3.2 + scale.parallelMul * stageMul,
+      attack: 0.004,
+      release: 0.16,
+      makeupDb: lowEndProtected ? 2.2 : 3.5,
     };
     log.push({
       type: 'decision',
@@ -585,18 +589,23 @@ export function planSession(diag, settings) {
     });
   }
 
-  // Harmonic exciter (Maztr saturation/distortion · iZotope excitement)
+  // Harmonic exciter — skip / whisper on bass-forward desks (adds clip grit)
   let exciter = null;
-  const excAmount = clamp(0.16 * scale.exciterMul, 0, 0.28);
-  if (excAmount >= 0.03 && !protect) {
+  const excAmount = clamp(0.16 * scale.exciterMul * (lowEndProtected ? 0.35 : 1), 0, 0.22);
+  if (excAmount >= 0.04 && !protect && !lowEndProtected) {
     exciter = {
       amount: excAmount,
       freq: settings.genre === 'acoustic' || settings.genre === 'classical' ? 4500 : 3200,
-      mix: clamp(0.14 * scale.exciterMul, 0.05, 0.22),
+      mix: clamp(0.14 * scale.exciterMul, 0.05, 0.2),
     };
     log.push({
       type: 'decision',
       text: `Decision: harmonic exciter — high-band blend ${(exciter.mix * 100).toFixed(0)}% @ ${exciter.freq} Hz.`,
+    });
+  } else if (lowEndProtected) {
+    log.push({
+      type: 'decision',
+      text: 'Decision: skip exciter — keep dembow / 808 edge clean into the limiter.',
     });
   }
 
@@ -608,35 +617,57 @@ export function planSession(diag, settings) {
       text: 'Decision: already over-compressed — skip heavy glue/sat/multiband (tap, don’t slam).',
     });
   } else {
+    if (lowEndProtected) sat = Math.min(sat, 0.05);
     log.push({
       type: 'decision',
       text: `Decision: Intensity ${scale.label} → glue ${glue.ratio.toFixed(2)}:1 @ ${glue.threshold} dB, sat ${(sat * 100).toFixed(0)}% (polish).`,
     });
   }
 
-  // Peak chain — bass-heavy / protect-low-end gets real TP margin
+  // Peak chain — per-genre style. Bass desks: transparent limit (no double soft-clip).
   const crest = diag.analysis?.crest ?? 12;
   const bassHeavy =
     lowEndProtected ||
     crest < 8.5 ||
     (isFinite(settings._truePeakDb) && settings._truePeakDb > -2.5);
-  let softClip =
-    scale.softClip ||
-    actions.has('peak_clip_limit') ||
-    bassHeavy ||
-    (isFinite(settings._truePeakDb) && settings._truePeakDb > -0.3);
+  const peakStyle = t.peakStyle || (lowEndProtected ? 'transparent' : 'polish');
 
+  let softClip = false;
+  let softClipDb = -0.5;
+  let softClipAmount = 0.35;
   let ceilingDb = scale.ceilingDb;
-  let tpMarginDb = 1.25;
-  if (bassHeavy) {
-    // 808 / protect-low-end: leave real intersample room (sample limit ≠ true peak)
-    ceilingDb = Math.min(ceilingDb, -1.5);
-    tpMarginDb = 2.1;
+  let tpMarginDb = 1.15;
+
+  if (peakStyle === 'transparent' || lowEndProtected) {
+    // Reggaeton / hip-hop / EDM: look-ahead limit only — preserve dembow punch
+    softClip = false;
+    ceilingDb = Math.min(ceilingDb, -1.2);
+    tpMarginDb = bassHeavy ? 1.45 : 1.25;
+  } else if (peakStyle === 'open') {
+    // Jazz / classical / acoustic — invisible peak path
+    softClip = false;
+    ceilingDb = Math.min(ceilingDb, -1.2);
+    tpMarginDb = 1.05;
+  } else if (peakStyle === 'firm') {
     softClip = true;
+    softClipDb = -0.55;
+    softClipAmount = 0.4;
+    tpMarginDb = 1.35;
+  } else {
+    // polish — light soft clip, not a rack of clippers
+    softClip =
+      scale.softClip ||
+      actions.has('peak_clip_limit') ||
+      (isFinite(settings._truePeakDb) && settings._truePeakDb > -0.2);
+    softClipDb = -0.45;
+    softClipAmount = 0.32;
+    tpMarginDb = 1.2;
   }
+
   if (scale.label === 'Punch' && bassHeavy) {
-    ceilingDb = Math.min(ceilingDb, -1.6);
-    tpMarginDb = 2.35;
+    ceilingDb = Math.min(ceilingDb, -1.3);
+    tpMarginDb = Math.max(tpMarginDb, 1.55);
+    // Still no soft-clip on protect-low-end — punch comes from transients, not grit
   }
 
   const targetLufs = refProfile
@@ -646,12 +677,12 @@ export function planSession(diag, settings) {
   if (softClip) {
     log.push({
       type: 'decision',
-      text: `Decision: peak polish — soft clip → limit @ ${ceilingDb} dBTP (TP margin ${tpMarginDb.toFixed(1)} dB${bassHeavy ? ', bass-safe' : ''}).`,
+      text: `Decision: peak polish — light soft clip → limit @ ${ceilingDb} dBTP (margin ${tpMarginDb.toFixed(1)} dB).`,
     });
   } else {
     log.push({
       type: 'decision',
-      text: `Decision: limit polish @ ${ceilingDb} dBTP · target ${targetLufs.toFixed(1)} LUFS.`,
+      text: `Decision: transparent limit @ ${ceilingDb} dBTP (margin ${tpMarginDb.toFixed(1)} dB${bassHeavy ? ', bass / dembow safe' : ''}) · target ${targetLufs.toFixed(1)} LUFS.`,
     });
   }
 
@@ -687,10 +718,12 @@ export function planSession(diag, settings) {
     skipHeavyRemould: true,
     peak: {
       softClip,
-      softClipDb: bassHeavy ? -1.25 : -0.7,
+      softClipDb,
+      softClipAmount,
       ceilingDb,
       tpMarginDb,
       targetLufs,
+      style: peakStyle,
     },
     log,
     findings: diag.findings,

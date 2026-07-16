@@ -49,13 +49,14 @@ export const PLAYBOOKS = {
       vocalPresence: { f: 2800, g: 1.8, q: 1.0 },
       deEss: { f: 7500, g: -1.2 },
       // Kick/bass: multiband sidechain-style duck on sustained low end
-      kickBassSep: { enabled: true, bandHz: 90, duckDb: 2.5, attackMs: 8, releaseMs: 120 },
+      kickBassSep: { enabled: true, bandHz: 90, duckDb: 1.8, attackMs: 8, releaseMs: 120 },
       airSide: { f: 10000, g: 0.8 },
-      glue: { threshold: -20, ratio: 1.6, attack: 0.035, release: 0.22 },
-      sat: 0.12,
+      glue: { threshold: -21, ratio: 1.45, attack: 0.04, release: 0.24 },
+      sat: 0.06,
       monoBassHz: 110,
       preserveWidth: true,
       protectLowEnd: true,
+      peakStyle: 'transparent', // 808 punch — limit only, no soft-clip grit
     },
   },
 
@@ -84,6 +85,7 @@ export const PLAYBOOKS = {
       glue: { threshold: -19, ratio: 1.7, attack: 0.025, release: 0.18 },
       sat: 0.1,
       monoBassHz: 130,
+      peakStyle: 'polish',
     },
   },
 
@@ -112,12 +114,13 @@ export const PLAYBOOKS = {
       vocalPresence: { f: 3000, g: 0.5, q: 1.0 },
       deEss: { f: 8000, g: -0.6 },
       glue: { threshold: -22, ratio: 1.3, attack: 0.04, release: 0.2 },
-      sat: 0.05,
+      sat: 0.04,
       // Mono only true sub — keep mid-bass stereo (Pirate / stereo balance)
       monoBassHz: 90,
       transientEnhance: { enabled: true, attackDb: 1.4, bandHz: 120 },
       preserveWidth: true,
       protectLowEnd: true,
+      peakStyle: 'transparent',
     },
   },
 
@@ -145,6 +148,7 @@ export const PLAYBOOKS = {
       glue: { threshold: -21, ratio: 1.55, attack: 0.04, release: 0.25 },
       sat: 0.14,
       monoBassHz: 110,
+      peakStyle: 'polish',
     },
   },
 
@@ -170,9 +174,11 @@ export const PLAYBOOKS = {
       highShelf: { f: 10000, g: 1.0 },
       kickBassSep: { enabled: true, bandHz: 95, duckDb: 1.8, attackMs: 12, releaseMs: 140 },
       airSide: { f: 10000, g: 1.0 },
-      glue: { threshold: -21, ratio: 1.5, attack: 0.035, release: 0.25 },
-      sat: 0.1,
+      glue: { threshold: -21, ratio: 1.45, attack: 0.04, release: 0.26 },
+      sat: 0.06,
       monoBassHz: 120,
+      protectLowEnd: true,
+      peakStyle: 'transparent',
     },
   },
 
@@ -199,6 +205,7 @@ export const PLAYBOOKS = {
       glue: { threshold: -24, ratio: 1.3, attack: 0.05, release: 0.3 },
       sat: 0.04,
       monoBassHz: 100,
+      peakStyle: 'open',
     },
   },
 
@@ -223,9 +230,11 @@ export const PLAYBOOKS = {
       vocalPresence: { f: 2000, g: 0.4, q: 1.0 },
       kickBassSep: { enabled: false },
       airSide: { f: 7000, g: -0.5 },
-      glue: { threshold: -20, ratio: 1.6, attack: 0.04, release: 0.28 },
-      sat: 0.22,
+      glue: { threshold: -21, ratio: 1.45, attack: 0.045, release: 0.28 },
+      sat: 0.14,
       monoBassHz: 130,
+      protectLowEnd: true,
+      peakStyle: 'transparent',
     },
   },
 
@@ -235,7 +244,7 @@ export const PLAYBOOKS = {
       'Dembow kick punch',
       'Bright percussion / hats',
       'Vocal forward without harshness',
-      'Controlled sub for club systems',
+      'Weight without soft-clip grit',
     ],
     spectrum: spec({ sub: 0.1, bass: 0.3, lowMid: 0.16, mid: 0.22, high: 0.14, air: 0.08 }),
     checks: {
@@ -244,16 +253,20 @@ export const PLAYBOOKS = {
     },
     techniques: {
       rumbleHp: 28,
-      lowShelf: { f: 85, g: 0.6 },
-      mudCut: { f: 280, g: -1.8, q: 0.9 },
-      vocalPresence: { f: 3200, g: 1.5, q: 1.0 },
-      highShelf: { f: 10000, g: 1.2 },
-      kickBassSep: { enabled: true, bandHz: 90, duckDb: 2.8, attackMs: 6, releaseMs: 100 },
-      airSide: { f: 10500, g: 1.2 },
+      lowShelf: { f: 85, g: 0.35 },
+      mudCut: { f: 280, g: -1.5, q: 0.9 },
+      vocalPresence: { f: 3200, g: 1.3, q: 1.0 },
+      highShelf: { f: 10000, g: 1.0 },
+      // Space for dembow — lighter duck so kick stays punchy into a clean limiter
+      kickBassSep: { enabled: true, bandHz: 90, duckDb: 1.6, attackMs: 8, releaseMs: 110 },
+      airSide: { f: 10500, g: 1.0 },
       deEss: { f: 7500, g: -1.0 },
-      glue: { threshold: -19, ratio: 1.65, attack: 0.022, release: 0.18 },
-      sat: 0.11,
-      monoBassHz: 130,
+      glue: { threshold: -21, ratio: 1.35, attack: 0.035, release: 0.22 },
+      sat: 0.04,
+      monoBassHz: 110,
+      preserveWidth: true,
+      protectLowEnd: true,
+      peakStyle: 'transparent', // dembow dies under stacked soft-clip
     },
   },
 
@@ -281,6 +294,7 @@ export const PLAYBOOKS = {
       glue: { threshold: -18, ratio: 1.8, attack: 0.02, release: 0.16 },
       sat: 0.12,
       monoBassHz: 110,
+      peakStyle: 'firm',
     },
   },
 
@@ -307,6 +321,7 @@ export const PLAYBOOKS = {
       glue: { threshold: -26, ratio: 1.25, attack: 0.05, release: 0.35 },
       sat: 0.05,
       monoBassHz: 90,
+      peakStyle: 'open',
     },
   },
 
@@ -332,6 +347,7 @@ export const PLAYBOOKS = {
       glue: { threshold: -28, ratio: 1.15, attack: 0.06, release: 0.4 },
       sat: 0.02,
       monoBassHz: 80,
+      peakStyle: 'open',
     },
   },
 
@@ -359,6 +375,7 @@ export const PLAYBOOKS = {
       glue: { threshold: -20, ratio: 2.4, attack: 0.015, release: 0.15 },
       sat: 0.04,
       monoBassHz: 200,
+      peakStyle: 'firm',
     },
   },
 };

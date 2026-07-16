@@ -77,34 +77,20 @@ export function enforceTruePeak(channelArrays, sampleRate, ceilingDb, opts = {})
     tp = truePeakDb(work, sampleRate);
     if (!Number.isFinite(tp) || tp <= ceilingDb + tol) break;
 
-    // Extra headroom beyond the measured over — 808s regenerate TP after limit
+    // Trim just past the measured over — avoid deep successive pulls (squash)
     const over = tp - ceilingDb;
-    const trimDb = -(over + 0.25 + i * 0.1);
+    const trimDb = -(over + 0.12 + i * 0.05);
     applyGainDb(work, trimDb);
     totalTrim += trimDb;
 
-    const sampleCeiling = ceilingDb - Math.max(0.85, tpMarginDb);
+    const sampleCeiling = ceilingDb - Math.max(0.7, Math.min(tpMarginDb, 1.6));
     work = limit(work, sampleRate, sampleCeiling, releaseMs);
-
-    // Absolute sample safety under advertised TP ceiling
-    const hard = trimToSamplePeak(work, ceilingDb - 0.05);
-    work = hard.channels;
-    totalTrim += hard.trimDb;
-  }
-
-  // Final absolute clamp — never ship a sample above the TP ceiling lin
-  const ceilLin = dbToLin(ceilingDb);
-  for (const ch of work) {
-    for (let i = 0; i < ch.length; i++) {
-      if (ch[i] > ceilLin) ch[i] = ceilLin;
-      else if (ch[i] < -ceilLin) ch[i] = -ceilLin;
-    }
   }
 
   tp = truePeakDb(work, sampleRate);
-  // If TP still slightly over (intersample), one last linear pull-down
+  // Last resort: linear pull only (no second soft-clip stage)
   if (Number.isFinite(tp) && tp > ceilingDb + tol) {
-    const pull = ceilingDb - tp - 0.05;
+    const pull = ceilingDb - tp - 0.08;
     applyGainDb(work, pull);
     totalTrim += pull;
     tp = truePeakDb(work, sampleRate);
@@ -114,13 +100,16 @@ export function enforceTruePeak(channelArrays, sampleRate, ceilingDb, opts = {})
 }
 
 /**
- * Gain → optional soft clip → look-ahead limit → true-peak enforce.
+ * Gain → optional light soft clip → look-ahead limit → true-peak enforce.
+ * Soft-clip is a gentle polish only — never a second brickwall (that sounds
+ * like two clippers on one rack).
  */
 export function peakPolish(channelArrays, sampleRate, opts = {}) {
   const {
     gainDb = 0,
     softClip = false,
     softClipDb = -0.5,
+    softClipAmount = 0.35,
     ceilingDb = -1.0,
     tpMarginDb = 1.0,
     releaseMs = 100,
@@ -133,11 +122,13 @@ export function peakPolish(channelArrays, sampleRate, opts = {}) {
   const appliedGain = Math.min(gainDb, safe);
   if (Math.abs(appliedGain) > 0.01) applyGainDb(work, appliedGain);
 
-  // Soft clip knee below the sample limiter ceiling; hard-cap at that ceiling
-  const sampleCeiling = ceilingDb - Math.max(0.85, tpMarginDb);
-  const softDb = Math.min(softClipDb, sampleCeiling - 0.15);
+  // Sample limiter sits a modest margin under the advertised TP ceiling
+  const sampleCeiling = ceilingDb - Math.max(0.7, Math.min(tpMarginDb, 1.8));
+  // Soft clip (if any) only shaves a little above the limiter — not a deep rack
+  const softDb = Math.min(softClipDb, ceilingDb - 0.15);
+  const hardDb = Math.min(sampleCeiling + 0.35, ceilingDb);
   const clipped = softClip
-    ? softClipChannels(work, softDb, 0.7, sampleCeiling)
+    ? softClipChannels(work, softDb, clamp(softClipAmount, 0.15, 0.55), hardDb)
     : work;
 
   let limited = limit(clipped, sampleRate, sampleCeiling, releaseMs);
@@ -146,9 +137,10 @@ export function peakPolish(channelArrays, sampleRate, opts = {}) {
   let tp = truePeakDb(limited, sampleRate);
   if (enforce) {
     const enforced = enforceTruePeak(limited, sampleRate, ceilingDb, {
-      releaseMs: Math.max(releaseMs, 150),
-      tpMarginDb,
-      tol: 0.02,
+      releaseMs: Math.max(releaseMs, 120),
+      tpMarginDb: Math.min(tpMarginDb, 1.6),
+      tol: 0.05,
+      maxIters: 4,
     });
     limited = enforced.channels;
     enforceTrim = enforced.trimDb;
