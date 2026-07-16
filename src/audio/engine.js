@@ -9,7 +9,7 @@ import { measureLoudness } from './lufs.js';
 import { measureRegions } from './analyzeTargets.js';
 import { diagnose } from './diagnose.js';
 import { planSession } from './planner.js';
-import { peakPolish } from './peakPolish.js';
+import { peakPolish, maxSafeGainDb, exceedsTruePeak } from './peakPolish.js';
 import {
   renderGraph, chain, peaking, lowShelf, highShelf, highpass, lowpass,
   gainNode, saturationCurve, compressor, makeBuffer, getChannelArrays, dbToLin,
@@ -198,7 +198,7 @@ function gluePass(inputBuffer, plan) {
     const shaper = ctx.createWaveShaper();
     shaper.curve = saturationCurve(sat);
     shaper.oversample = '2x';
-    const makeup = plan.protectDynamics ? 0.15 : 0.35;
+    const makeup = plan.protectDynamics ? 0.05 : plan.protectLowEnd ? 0.08 : 0.2;
     return chain([source, glue, shaper, gainNode(ctx, dbToLin(makeup))]);
   });
 }
@@ -216,6 +216,7 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   const planSettings = {
     ...settings,
     _truePeakDb: analysis.truePeakDb,
+    _crest: analysis.crest,
   };
 
   report(0.1, 'Building polish plan (peaks, instruments, references)…');
@@ -272,9 +273,10 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   for (const s of specs) {
     const cur = Math.max(midRegions[s.key], 1e-6);
     let g = 20 * Math.log10(tgt[s.key] / cur) * refineMul;
-    // Don't scoop protected low end during refine
-    if (plan.protectLowEnd && (s.key === 'sub' || s.key === 'bass') && g < 0) {
-      g *= 0.25;
+    // Protect low end: damp cuts AND forbid boosts that feed the limiter
+    if (plan.protectLowEnd && (s.key === 'sub' || s.key === 'bass')) {
+      if (g < 0) g *= 0.25;
+      else g *= 0.15; // almost never add more bass into the peak chain
     }
     g = clamp(g, -s.max, s.max);
     if (Math.abs(g) < 0.35) continue;
@@ -310,21 +312,56 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   const fs = buf.sampleRate;
   const base = getChannelArrays(buf);
   const baseLufs = measureLoudness(base.map((c) => c), fs).integrated;
+  const tpMargin = peak.tpMarginDb ?? (plan.protectLowEnd ? 1.35 : 1.0);
   let gainDb = clamp(peak.targetLufs - baseLufs, -14, 14);
+  // Don't ask for more makeup than peak headroom allows (bass-heavy redline fix)
+  gainDb = Math.min(gainDb, maxSafeGainDb(base, peak.ceilingDb, tpMargin));
+
   let limited = base;
-  for (let iter = 0; iter < 3; iter++) {
-    limited = peakPolish(base, fs, {
+  let appliedGain = gainDb;
+  for (let iter = 0; iter < 4; iter++) {
+    const polished = peakPolish(base, fs, {
       gainDb,
-      softClip: peak.softClip,
-      softClipDb: peak.softClipDb,
+      softClip: peak.softClip || plan.protectLowEnd,
+      softClipDb: peak.softClipDb ?? -0.7,
       ceilingDb: peak.ceilingDb,
-      releaseMs: plan.protectDynamics ? 140 : 100,
+      tpMarginDb: tpMargin,
+      releaseMs: plan.protectDynamics || plan.protectLowEnd ? 160 : 110,
     });
+    limited = polished.channels;
+    appliedGain = polished.appliedGainDb;
+
+    const { over, truePeakDb: tp } = exceedsTruePeak(limited, fs, peak.ceilingDb, 0.05);
+    if (over) {
+      // Back off makeup when true-peak still redlines (common on heavy bass)
+      gainDb = clamp(gainDb - Math.max(0.4, (tp - peak.ceilingDb) * 1.2), -14, appliedGain);
+      continue;
+    }
+
     const achieved = measureLoudness(limited.map((c) => c), fs).integrated;
     const err = peak.targetLufs - achieved;
-    if (Math.abs(err) < 0.3) break;
-    gainDb = clamp(gainDb + err * 0.8, -14, 14);
+    if (Math.abs(err) < 0.35) break;
+    const next = clamp(gainDb + err * 0.65, -14, 14);
+    gainDb = Math.min(next, maxSafeGainDb(base, peak.ceilingDb, tpMargin));
     await yieldFrame();
+  }
+
+  // Final TP safety pass — never ship a redline
+  {
+    const check = exceedsTruePeak(limited, fs, peak.ceilingDb, 0.02);
+    if (check.over) {
+      const trim = Math.max(0.25, check.truePeakDb - peak.ceilingDb + 0.15);
+      const polished = peakPolish(base, fs, {
+        gainDb: Math.min(appliedGain, gainDb) - trim,
+        softClip: true,
+        softClipDb: Math.min(-0.8, peak.ceilingDb - 0.2),
+        ceilingDb: peak.ceilingDb,
+        tpMarginDb: Math.max(tpMargin, 1.4),
+        releaseMs: 180,
+      });
+      limited = polished.channels;
+      appliedGain = polished.appliedGainDb;
+    }
   }
 
   report(0.94, 'Final metering…');
@@ -350,7 +387,7 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
       })),
     regionsBefore: diag.regions,
     regionsAfter,
-    gainDb,
+    gainDb: appliedGain,
     genre,
     settings: { ...settings, targetLufs: peak.targetLufs },
     intensity: settings.dynamicsProfile,

@@ -200,27 +200,37 @@ export function planSession(diag, settings) {
     });
   }
 
+  // Cap low-end shelves when material is already peaky (stops bass boost → redline)
+  const inputCrest = diag.analysis?.crest ?? settings._crest;
+  const peakyInput =
+    (isFinite(inputCrest) && inputCrest < 8.5) ||
+    (isFinite(settings._truePeakDb) && settings._truePeakDb > -2.5);
+
   // Low shelf — for EDM always apply genre weight unless cutting sub hard
   if (actions.has('boost_upper_bass') || (t.upperBassShelf && !actions.has('cut_sub'))) {
     const shelf = t.upperBassShelf || t.lowShelf;
     if (shelf) {
-      const g =
+      let g =
         (shelf.g || 0.6) *
         scale.eqMul *
         (actions.has('boost_upper_bass') ? 1.0 : lowEndProtected ? 0.85 : 0.45);
+      if (peakyInput) g *= 0.35;
       if (Math.abs(g) > 0.15) {
         eq.push({
           type: 'lowshelf',
           freq: shelf.f,
           gain: polish(g),
           label: 'Upper-bass weight',
-          reason: 'Low-end impact + small-speaker translation',
+          reason: peakyInput
+            ? 'Light low-end weight — input already peaky'
+            : 'Low-end impact + small-speaker translation',
         });
       }
     }
   } else if (t.lowShelf && !actions.has('cut_sub')) {
     const baseMul = lowEndProtected ? 0.85 : 0.45;
-    const g = t.lowShelf.g * baseMul * scale.eqMul + (settings.bass || 0) * 0.3;
+    let g = t.lowShelf.g * baseMul * scale.eqMul + (settings.bass || 0) * 0.3;
+    if (peakyInput) g *= 0.35;
     if (Math.abs(g) > 0.15) {
       eq.push({
         type: 'lowshelf',
@@ -480,14 +490,22 @@ export function planSession(diag, settings) {
   // Transient enhance (EDM kicks / synth stabs — MasteringBOX / Production Expert)
   let transient = null;
   if (t.transientEnhance?.enabled && !protect) {
-    transient = {
-      bandHz: t.transientEnhance.bandHz || 120,
-      attackDb: (t.transientEnhance.attackDb || 1.2) * scale.eqMul * 0.85,
-    };
-    log.push({
-      type: 'decision',
-      text: `Decision: transient polish +${transient.attackDb.toFixed(1)} dB on low attack — punch without loudness race.`,
-    });
+    const crest = diag.analysis?.crest ?? settings._crest ?? 12;
+    const tpHot = isFinite(settings._truePeakDb) && settings._truePeakDb > -3;
+    const crestTight = crest < 8.5;
+    let attackDb = (t.transientEnhance.attackDb || 1.2) * scale.eqMul * 0.85;
+    if (lowEndProtected) attackDb *= 0.55;
+    if (crestTight || tpHot) attackDb *= 0.4;
+    if (attackDb > 0.25) {
+      transient = {
+        bandHz: t.transientEnhance.bandHz || 120,
+        attackDb,
+      };
+      log.push({
+        type: 'decision',
+        text: `Decision: transient polish +${transient.attackDb.toFixed(1)} dB on low attack — punch without loudness race.`,
+      });
+    }
   }
 
   // Glue / sat — heavily restrained (user: Medium EDM was crushed)
@@ -511,11 +529,30 @@ export function planSession(diag, settings) {
     });
   }
 
-  // Peak chain
-  const softClip =
+  // Peak chain — bass-heavy / protect-low-end gets real TP margin
+  const crest = diag.analysis?.crest ?? 12;
+  const bassHeavy =
+    lowEndProtected ||
+    crest < 8.5 ||
+    (isFinite(settings._truePeakDb) && settings._truePeakDb > -2.5);
+  let softClip =
     scale.softClip ||
     actions.has('peak_clip_limit') ||
+    bassHeavy ||
     (isFinite(settings._truePeakDb) && settings._truePeakDb > -0.3);
+
+  let ceilingDb = scale.ceilingDb;
+  let tpMarginDb = 1.0;
+  if (bassHeavy) {
+    ceilingDb = Math.min(ceilingDb, -1.3);
+    tpMarginDb = 1.45;
+    softClip = true;
+  }
+  if (scale.label === 'Punch' && bassHeavy) {
+    ceilingDb = Math.min(ceilingDb, -1.4);
+    tpMarginDb = 1.55;
+  }
+
   const targetLufs = refProfile
     ? clamp(refProfile.lufs, -18, -9)
     : settings.targetLufs;
@@ -523,12 +560,12 @@ export function planSession(diag, settings) {
   if (softClip) {
     log.push({
       type: 'decision',
-      text: `Decision: peak polish — soft clip → limit @ ${scale.ceilingDb} dBTP (Aurora: clip then limit).`,
+      text: `Decision: peak polish — soft clip → limit @ ${ceilingDb} dBTP (TP margin ${tpMarginDb.toFixed(1)} dB${bassHeavy ? ', bass-safe' : ''}).`,
     });
   } else {
     log.push({
       type: 'decision',
-      text: `Decision: limit polish @ ${scale.ceilingDb} dBTP · target ${targetLufs.toFixed(1)} LUFS.`,
+      text: `Decision: limit polish @ ${ceilingDb} dBTP · target ${targetLufs.toFixed(1)} LUFS.`,
     });
   }
 
@@ -561,8 +598,9 @@ export function planSession(diag, settings) {
     skipHeavyRemould: true,
     peak: {
       softClip,
-      softClipDb: -0.5,
-      ceilingDb: scale.ceilingDb,
+      softClipDb: bassHeavy ? -0.85 : -0.5,
+      ceilingDb,
+      tpMarginDb,
       targetLufs,
     },
     log,
