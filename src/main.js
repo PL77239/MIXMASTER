@@ -215,35 +215,49 @@ function renderMeters(before, after, target) {
 }
 
 function renderNotes(result) {
-  const { corrective, gainDb, genre, settings, regionsBefore, regionsAfter } = result;
+  const {
+    corrective, gainDb, genre, settings, regionsBefore, regionsAfter,
+    engineerLog, plan,
+  } = result;
   const intensityLabel = {
     open: 'Low', balanced: 'Medium', punchy: 'High',
   }[settings.dynamicsProfile] || settings.dynamicsProfile;
-  const moves = corrective.length
-    ? corrective.map((m) => `<li><b>${m.band}</b> (${Math.round(m.freq)} Hz):
-        ${m.gain > 0 ? '+' : ''}${m.gain.toFixed(1)} dB
-        ${m.detail ? `<span style="opacity:.7"> · ${m.detail}</span>` : ''}</li>`).join('')
-    : '<li>Already close to ANALYZE balance target — light polish only.</li>';
+
+  const logHtml = (engineerLog || [])
+    .map((l) => {
+      if (l.type === 'role') return `<li><b>${l.text}</b></li>`;
+      if (l.type === 'finding') return `<li style="opacity:.95">🔍 ${l.text}</li>`;
+      if (l.type === 'decision') return `<li>→ ${l.text}</li>`;
+      return `<li>${l.text}</li>`;
+    }).join('');
+
+  const moves = (corrective || []).length
+    ? corrective.map((m) => `<li><b>${m.band}</b>${m.freq ? ` (${Math.round(m.freq)} Hz)` : ''}:
+        ${m.gain > 0 ? '+' : ''}${(m.gain || 0).toFixed(1)} dB
+        ${m.detail ? `<span style="opacity:.7"> — ${m.detail}</span>` : ''}</li>`).join('')
+    : '<li>No EQ moves needed.</li>';
 
   const fmtR = (r) => r
     ? `sub ${(r.sub * 100).toFixed(0)}% · bass ${(r.bass * 100).toFixed(0)}% · low-mid ${(r.lowMid * 100).toFixed(0)}% · mid ${(r.mid * 100).toFixed(0)}% · high ${(r.high * 100).toFixed(0)}% · air ${(r.air * 100).toFixed(0)}%`
     : '—';
 
+  const kb = plan?.kickBass
+    ? `<li>Kick/bass sep: duck ${plan.kickBass.duckDb.toFixed(1)} dB @ ${plan.kickBass.bandHz} Hz</li>`
+    : '<li>Kick/bass: left alone</li>';
+
   $('analysisNotes').innerHTML = `
-    <h4>ANALYZE-balanced EQ</h4>
-    <ul>${moves}</ul>
-    <h4>Spectral fractions</h4>
+    <h4>Engineer session</h4>
+    <ul>${logHtml}</ul>
+    <h4>Moves applied</h4>
+    <ul>${moves}${kb}</ul>
+    <h4>Spectral check</h4>
     <ul>
       <li>Before: ${fmtR(regionsBefore)}</li>
       <li>After: ${fmtR(regionsAfter)}</li>
-      <li>Target: sub 8% · bass 28% · low-mid 20% · mid 26% · high 13% · air 5%</li>
     </ul>
-    <h4>Mastering chain</h4>
+    <h4>Delivery</h4>
     <ul>
-      <li>Genre: <b>${genre.label}</b> · Mixea Intensity <b>${intensityLabel}</b>
-        (preserves ANALYZE dynamics window)</li>
-      <li>EQ matched to ANALYZE modern-master balance + light genre tint</li>
-      <li>Stereo width steered into ANALYZE sweet spot · bass kept mono</li>
+      <li>Genre desk: <b>${genre.label}</b> · Intensity <b>${intensityLabel}</b></li>
       <li>Normalized <b>${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB</b>
         → <b>${settings.targetLufs} LUFS</b> · ceiling <b>&minus;1 dBTP</b></li>
     </ul>`;

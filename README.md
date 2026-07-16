@@ -23,16 +23,17 @@ bass, anti-masking) — not proprietary Dolby or Mixea code.
      gating). Calibration verified against `pyloudnorm` (within ~0.05 LU).
    - **Spectral balance** across 8 bands (sub → air) via FFT.
    - **Dynamics** (crest factor), **sample/true peak**, and **stereo** width.
-2. **ANALYZE-balanced EQ** — matches the spectral proportions used by the
-   companion [ANALYZE](https://pl77239.github.io/ANALYZE/) mix scorer
-   (sub/bass/low-mid/mid/high/air), with a light genre tint. Two EQ passes
-   close the gap without crushing the source.
-3. **Mixea-style Intensity** — Low / Medium / High. Medium preserves dynamics
-   (ANALYZE rewards crest ~6–16 dB); High adds light multiband.
-4. **Stereo width** steered into ANALYZE’s sweet spot; bass stays mono.
-5. **Light glue / soft saturation** only when Intensity asks for it.
-6. **Loudness normalization** to the target LUFS + look-ahead **−1 dBTP**
-   limiter (ITU-R BS.1770).
+2. **Genre engineer session** — selecting a genre loads a specialist playbook
+   (priorities, diagnostics, techniques from published mixing/mastering
+   practice). The desk diagnoses kick/bass fights, mud, vocal presence, width,
+   harshness, then decides moves (not blind curve matching).
+3. **Techniques** — kick/bass separation (sidechain-style sustain duck), vocal
+   pockets, mud/box cuts, mono-safe bass, side-channel air (Matchering-style
+   mid/side thinking).
+4. **Mixea-style Intensity** — Low / Medium / High scales how hard glue/sat hit.
+5. **Closing genre FR refine** toward the playbook spectrum, then **−14 LUFS**
+   + **−1 dBTP** (ITU-R BS.1770 / Dolby loudness discipline).
+6. Session log shows findings and decisions so you can see *why* it mixed.
 
 Output is re-encoded to the **same container** as the input:
 WAV (16/24-bit or 32-bit float), MP3 (via LAME), or FLAC (via libFLAC).

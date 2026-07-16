@@ -1,8 +1,5 @@
-// Spectral targets aligned with PL77239/ANALYZE mix scoring
-// (assets/js/dsp/mix.js frequencyBalance target proportions).
-//
-// ANALYZE band edges: [0, 60, 120, 250, 500, 1000, 2000, 4000, 8000, 16000, Nyquist]
-// Regions: sub=0-60, bass=60-250, lowMid=250-500, mid=500-2000, high=2k-8k, air=8k+
+// Spectral measurement helpers shared by the engineer + ANALYZE alignment.
+import { FFT, hann } from './fft.js';
 
 export const ANALYZE_BAND_EDGES = [0, 60, 120, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
@@ -15,43 +12,76 @@ export const ANALYZE_MIX_TARGET = {
   air: 0.05,
 };
 
-// Light genre tints applied on top of ANALYZE_MIX_TARGET, then re-normalised.
-// Keep these small — ANALYZE rewards the baseline curve hard (34% of mix score).
-export const GENRE_TINTS = {
-  hiphop: { sub: 0.03, bass: 0.04, lowMid: -0.02, mid: -0.02, high: 0.0, air: -0.01 },
-  pop: { sub: 0.0, bass: 0.0, lowMid: -0.02, mid: 0.01, high: 0.02, air: 0.02 },
-  edm: { sub: 0.02, bass: 0.03, lowMid: -0.03, mid: -0.01, high: 0.01, air: 0.01 },
-  rock: { sub: -0.01, bass: 0.0, lowMid: 0.0, mid: 0.03, high: 0.01, air: 0.0 },
-  rnb: { sub: 0.02, bass: 0.02, lowMid: 0.0, mid: -0.01, high: 0.0, air: 0.01 },
-  acoustic: { sub: -0.01, bass: -0.02, lowMid: 0.0, mid: 0.02, high: 0.01, air: 0.01 },
-  lofi: { sub: 0.01, bass: 0.03, lowMid: 0.02, mid: 0.0, high: -0.03, air: -0.03 },
-  latin: { sub: 0.02, bass: 0.03, lowMid: -0.02, mid: 0.0, high: 0.01, air: 0.0 },
-  metal: { sub: 0.0, bass: 0.01, lowMid: -0.01, mid: 0.02, high: 0.0, air: -0.01 },
-  jazz: { sub: 0.0, bass: 0.0, lowMid: 0.0, mid: 0.01, high: 0.0, air: 0.01 },
-  classical: { sub: 0.0, bass: -0.01, lowMid: 0.0, mid: 0.01, high: 0.0, air: 0.01 },
-  podcast: { sub: -0.04, bass: -0.06, lowMid: -0.02, mid: 0.06, high: 0.04, air: 0.0 },
-};
-
-export function tintedTarget(genreKey) {
-  const tint = GENRE_TINTS[genreKey] || {};
-  const out = {};
-  let sum = 0;
-  for (const k of Object.keys(ANALYZE_MIX_TARGET)) {
-    out[k] = Math.max(0.01, ANALYZE_MIX_TARGET[k] + (tint[k] || 0));
-    sum += out[k];
-  }
-  for (const k of Object.keys(out)) out[k] /= sum;
-  return out;
-}
-
-// Ideal ANALYZE dynamics window (from mix.js normRange bounds).
 export const ANALYZE_DYNAMICS = {
   crestMin: 6,
   crestMax: 16,
-  crestSweet: 10, // aim near middle of the rewarded range
+  crestSweet: 10,
   drMin: 3,
   drMax: 14,
   widthMin: 0.05,
   widthMax: 0.28,
   widthSweet: 0.16,
 };
+
+function monoFromChannels(channels) {
+  if (channels.length === 1) return channels[0];
+  const n = channels[0].length;
+  const m = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let c = 0; c < channels.length; c++) s += channels[c][i];
+    m[i] = s / channels.length;
+  }
+  return m;
+}
+
+/** Same region fractions ANALYZE uses in frequencyBalance(). */
+export function measureRegions(channels, sampleRate) {
+  const mono = monoFromChannels(channels);
+  const size = 2048;
+  const hop = 512;
+  const fft = new FFT(size);
+  const win = hann(size);
+  const edges = [...ANALYZE_BAND_EDGES, sampleRate / 2];
+  const nBands = edges.length - 1;
+  const binHz = sampleRate / size;
+  const binBand = new Int16Array(size / 2);
+  for (let b = 0; b < size / 2; b++) {
+    const f = b * binHz;
+    let band = nBands - 1;
+    for (let k = 0; k < nBands; k++) {
+      if (f >= edges[k] && f < edges[k + 1]) { band = k; break; }
+    }
+    binBand[b] = band;
+  }
+
+  const sum = new Float64Array(nBands);
+  const re = new Float32Array(size);
+  const im = new Float32Array(size);
+  const nFrames = Math.max(0, Math.floor((mono.length - size) / hop) + 1);
+  const stride = Math.max(1, Math.floor(nFrames / 200));
+  for (let fi = 0; fi < nFrames; fi += stride) {
+    const off = fi * hop;
+    for (let i = 0; i < size; i++) {
+      re[i] = mono[off + i] * win[i];
+      im[i] = 0;
+    }
+    fft.transform(re, im);
+    for (let b = 1; b < size / 2; b++) {
+      sum[binBand[b]] += re[b] * re[b] + im[b] * im[b];
+    }
+  }
+
+  let total = 0;
+  for (let b = 0; b < nBands; b++) total += sum[b];
+  total = total || 1e-9;
+  const frac = Array.from(sum, (s) => s / total);
+  return {
+    sub: frac[0],
+    bass: frac[1] + frac[2],
+    lowMid: frac[3],
+    mid: frac[4] + frac[5],
+    high: frac[6] + frac[7],
+    air: frac[8] + frac[9],
+  };
+}
