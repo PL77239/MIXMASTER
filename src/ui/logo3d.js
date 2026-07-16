@@ -67,15 +67,16 @@ export function initLogo3d() {
 
   const updateSticky = () => {
     if (!root) return;
-    // Corner mark stays top-left; slight shrink on scroll
-    const t = Math.min(1, Math.max(0, window.scrollY / 420));
-    const scale = 1 - t * 0.18;
+    // Big at top, compact when scrolled — stays top-left
+    const t = Math.min(1, Math.max(0, window.scrollY / 380));
+    const ease = t * t * (3 - 2 * t); // smoothstep
+    const scale = 1 - ease * 0.58; // 1.0 → ~0.42
     stickyActive = true;
 
     root.style.setProperty('--logo-scale', scale.toFixed(4));
-    root.style.setProperty('--logo-top', '14px');
-    root.style.setProperty('--logo-left', 'clamp(14px, 3vw, 28px)');
-    root.classList.toggle('is-docked', window.scrollY > 40);
+    root.style.setProperty('--logo-top', '10px');
+    root.style.setProperty('--logo-left', 'clamp(12px, 2.5vw, 24px)');
+    root.classList.toggle('is-docked', window.scrollY > 48);
     root.style.pointerEvents = 'auto';
   };
 

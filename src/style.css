@@ -1,4 +1,4 @@
-/* MIXMASTER LA — editorial desk silhouette
+/* MIXA — editorial desk silhouette
    Inspired by pxpush (cursor glide / motion), vanmorrison (ink clarity),
    muse history (confident type), patch (direct product sections). */
 
@@ -153,22 +153,23 @@ body.is-touch .cursor-glide { display: none !important; }
 /* ---------- 3D logo (pxpush-style) — top-left ---------- */
 .logo3d {
   --logo-scale: 1;
-  --logo-top: 14px;
-  --logo-left: clamp(14px, 3vw, 28px);
+  --logo-top: 10px;
+  --logo-left: clamp(12px, 2.5vw, 24px);
   position: fixed;
   left: var(--logo-left);
   top: var(--logo-top);
-  width: min(22vw, 168px);
+  width: min(38vw, 280px);
   aspect-ratio: 200 / 110;
   height: auto;
-  max-height: 92px;
+  max-height: 160px;
   transform: scale(var(--logo-scale));
   transform-origin: 0 0;
   z-index: 24;
   pointer-events: auto;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.5s ease;
+  transition: opacity 0.45s ease, transform 0.15s linear;
+  will-change: transform;
 }
 .logo3d.is-ready { opacity: 1; }
 .logo3d.is-docked {
@@ -195,19 +196,20 @@ body.is-touch .cursor-glide { display: none !important; }
 }
 @media screen and (max-width: 700px) {
   .logo3d {
-    width: min(42vw, 140px);
-    --logo-top: 12px;
-    --logo-left: 12px;
+    width: min(56vw, 200px);
+    max-height: 120px;
+    --logo-top: 10px;
+    --logo-left: 10px;
   }
 }
 
 /* Text brand sits beside the 3D mark */
 body:has(.logo3d.is-ready) .brand {
-  padding-left: min(24vw, 180px);
+  padding-left: min(40vw, 300px);
 }
 @media screen and (max-width: 700px) {
   body:has(.logo3d.is-ready) .brand {
-    padding-left: min(46vw, 152px);
+    padding-left: min(58vw, 210px);
   }
   body:has(.logo3d.is-ready) .brand__name {
     display: none;
@@ -280,13 +282,11 @@ body.has-tidewave .desk-top .topbar {
 }
 body.has-tidewave .brand,
 body.has-tidewave .brand__name { color: #eceae4; }
-body.has-tidewave .brand__la,
 body.has-tidewave .meta-line { color: rgba(236, 234, 228, 0.55); }
 body.has-tidewave .brand__dot { color: #9eb6ff; }
 body.has-tidewave .hero__index,
 body.has-tidewave .hero__scroll-hint { color: rgba(236, 234, 228, 0.5); }
 body.has-tidewave .hero__brand { color: #eceae4; }
-body.has-tidewave .hero__brand span { color: #9eb6ff; }
 body.has-tidewave .hero__title { color: #eceae4; }
 body.has-tidewave .hero__sub { color: rgba(236, 234, 228, 0.72); }
 body.has-tidewave .hero__sub b { color: #fff; }
@@ -341,12 +341,6 @@ body.has-tidewave .btn--primary:hover {
   font-weight: 800;
   font-size: 18px;
   letter-spacing: 0.04em;
-}
-.brand__la {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  color: var(--ink-faint);
 }
 .topbar__meta {
   display: flex;
@@ -659,11 +653,6 @@ body.has-tidewave .btn--primary:hover {
   line-height: 0.92;
   color: var(--ink);
   cursor: none;
-}
-.hero__brand span {
-  display: inline-block;
-  margin-left: 0.18em;
-  color: var(--accent);
 }
 
 .hero__title {
