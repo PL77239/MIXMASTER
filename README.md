@@ -47,14 +47,19 @@ selector (−14 / −16 / −9 / −23 LUFS).
 
 ## Run it
 
+**Live site:** https://pl77239.github.io/MIXMASTER/
+
 ```bash
 npm install
-npm run dev      # local dev server (Vite)
+npm run dev      # local Vite dev server
 # or
-npm run build && npm run preview   # production build + static preview
+npm run build    # production build + publish assets for GitHub Pages
+npm run preview  # preview the Vite dist/ locally
 ```
 
-Then open the printed URL. Everything runs in the browser — no server, no upload.
+`npm run build` bundles CSS/JS into `assets/` and writes a production `index.html` at the repo root so GitHub Pages (which serves this branch from `/`) gets a fully styled, working app — not the raw Vite source.
+
+Everything runs in the browser — no server, no upload of your audio.
 
 ## Tech notes
 
