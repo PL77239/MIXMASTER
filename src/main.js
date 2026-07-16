@@ -23,6 +23,61 @@ const state = {
   busy: false,
 };
 
+/** Reset UI + session so the user can upload a new track (logo / brand click). */
+function resetSession() {
+  if (state.busy) {
+    toast('Wait for the current job to finish…', true);
+    return;
+  }
+  player.pause();
+  state.decoded = null;
+  state.analysis = null;
+  state.result = null;
+  state.outputBlob = null;
+  state.references = [];
+  state.room = 'studio';
+  state.listenRoom = 'studio';
+
+  const fileInput = $('fileInput');
+  if (fileInput) fileInput.value = '';
+  const refInput = $('refInput');
+  if (refInput) refInput.value = '';
+  const refUrl = $('refUrlInput');
+  if (refUrl) refUrl.value = '';
+
+  $('fileCard')?.classList.add('hidden');
+  $('progressCard')?.classList.add('hidden');
+  $('resultCard')?.classList.add('hidden');
+  $('processBtn').disabled = true;
+  $('progressBar').style.width = '0%';
+
+  // Reset room UI
+  $('roomToggle')?.querySelectorAll('.room-btn').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.room === 'studio');
+  });
+  const room = getRoom('studio');
+  if ($('roomHint')) $('roomHint').textContent = room.desc;
+  $('listenRoom')?.querySelectorAll('.room-btn').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.listen === 'studio');
+  });
+  player.setRoom('studio');
+
+  if (typeof updateRefHint === 'function') updateRefHint();
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  toast('Ready for a new track.');
+  setTimeout(() => $('dropCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+}
+
+function bindBrandHome() {
+  const goHome = (e) => {
+    e.preventDefault();
+    resetSession();
+  };
+  $('brandHome')?.addEventListener('click', goHome);
+  $('heroHome')?.addEventListener('click', goHome);
+}
+
 // ---------- toast ----------
 let toastEl;
 function toast(msg, isError = false) {
@@ -304,8 +359,8 @@ function drawCurrentWave() {
     ? state.decoded.audioBuffer
     : state.result.buffer;
   const colors = currentView === 'original'
-    ? ['#8f7fb3', '#a855f7']
-    : ['#ffd25a', '#ff2d95'];
+    ? ['#6a7f99', '#5ec8ff']
+    : ['#d4e8ff', '#3a7bd5'];
   drawWaveform($('waveCanvas'), buf, colors[0], colors[1]);
 }
 
@@ -521,4 +576,5 @@ bindRooms();
 bindRefs();
 bindDropzone();
 bindResultControls();
+bindBrandHome();
 $('processBtn').addEventListener('click', runProcess);

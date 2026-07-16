@@ -14,25 +14,29 @@
       href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-CWgnikHp.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-Xklqnrni.css">
+    <script type="module" crossorigin src="./assets/index-DAfjqof3.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-29T7VcQv.css">
   </head>
   <body>
-    <div class="sky"></div>
-    <div class="sun"></div>
-    <div class="grid-floor"></div>
+    <div class="sky" aria-hidden="true">
+      <div class="stars"></div>
+      <div class="haze"></div>
+    </div>
+    <div class="moon" aria-hidden="true"></div>
+    <div class="hills" aria-hidden="true"></div>
     <div class="skyline" aria-hidden="true"></div>
+    <div class="street" aria-hidden="true"></div>
     <div class="palms" aria-hidden="true">
       <div class="palm palm--left"></div>
       <div class="palm palm--right"></div>
     </div>
 
     <header class="topbar">
-      <div class="brand">
+      <button type="button" class="brand" id="brandHome" title="Start over — upload a new track" aria-label="MIXMASTER LA — reset and upload a new track">
         <span class="brand__mark">◈</span>
         <span class="brand__name">MIXMASTER</span>
         <span class="brand__la">LA</span>
-      </div>
+      </button>
       <nav class="topbar__meta">
         <span class="pill pill--live"><i></i> Studio online</span>
         <span class="pill">100% in-browser</span>
@@ -41,10 +45,12 @@
 
     <main class="stage">
       <section class="hero">
-        <p class="hero__brand">MIXMASTER <span>LA</span></p>
-        <p class="hero__eyebrow">Sunset Blvd · Analog warmth · Digital precision</p>
+        <button type="button" class="hero__brand" id="heroHome" title="Start over — upload a new track" aria-label="MIXMASTER LA — reset and upload a new track">
+          MIXMASTER <span>LA</span>
+        </button>
+        <p class="hero__eyebrow">After hours · Downtown glow · Digital precision</p>
         <h1 class="hero__title">
-          Your track,<br /><span>mastered for the world.</span>
+          Your track,<br /><span>mastered for the night.</span>
         </h1>
         <p class="hero__sub">
           Upload a <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. The desk detects instruments,
@@ -209,7 +215,7 @@
         <p>
           MIXMASTER LA runs entirely on your device — your audio never leaves the
           browser. Built with the Web Audio API, an ITU-R BS.1770 loudness engine,
-          and true-peak limiting. Made with sunshine in Los Angeles.
+          and true-peak limiting. After hours in Los Angeles.
         </p>
       </footer>
     </main>
