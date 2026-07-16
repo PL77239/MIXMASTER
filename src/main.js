@@ -8,6 +8,7 @@ import { fetchReferenceFromUrl, qualityBadge } from './audio/fetchReference.js';
 import { encodeBuffer, EXTENSIONS } from './encode/index.js';
 import { drawWaveform, drawSpectrum } from './ui/visualizer.js';
 import { ABPlayer } from './ui/player.js';
+import { initCursor, initReveals } from './ui/cursor.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -359,8 +360,8 @@ function drawCurrentWave() {
     ? state.decoded.audioBuffer
     : state.result.buffer;
   const colors = currentView === 'original'
-    ? ['#6a7f99', '#5ec8ff']
-    : ['#d4e8ff', '#3a7bd5'];
+    ? ['#9a9a9a', '#3a3a3a']
+    : ['#0a3d91', '#121212'];
   drawWaveform($('waveCanvas'), buf, colors[0], colors[1]);
 }
 
@@ -577,4 +578,6 @@ bindRefs();
 bindDropzone();
 bindResultControls();
 bindBrandHome();
+initCursor();
+initReveals();
 $('processBtn').addEventListener('click', runProcess);

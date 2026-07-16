@@ -11,68 +11,69 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div class="sky" aria-hidden="true">
-      <div class="stars"></div>
-      <div class="haze"></div>
-    </div>
-    <div class="moon" aria-hidden="true"></div>
-    <div class="hills" aria-hidden="true"></div>
-    <div class="skyline" aria-hidden="true"></div>
-    <div class="street" aria-hidden="true"></div>
-    <div class="palms" aria-hidden="true">
-      <div class="palm palm--left"></div>
-      <div class="palm palm--right"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="cursor" id="cursor" aria-hidden="true">
+      <div class="cursor__ring"></div>
+      <div class="cursor__dot"></div>
     </div>
 
     <header class="topbar">
-      <button type="button" class="brand" id="brandHome" title="Start over — upload a new track" aria-label="MIXMASTER LA — reset and upload a new track">
-        <span class="brand__mark">◈</span>
+      <button type="button" class="brand hover_effect" id="brandHome" title="Start over — upload a new track" aria-label="MIXMASTER LA — reset and upload a new track">
+        <span class="brand__dot">●</span>
         <span class="brand__name">MIXMASTER</span>
         <span class="brand__la">LA</span>
       </button>
       <nav class="topbar__meta">
-        <span class="pill pill--live"><i></i> Studio online</span>
-        <span class="pill">100% in-browser</span>
+        <span class="meta-line">Nº · Studio online</span>
+        <span class="meta-line meta-line--dim">100% in-browser</span>
       </nav>
     </header>
 
     <main class="stage">
       <section class="hero">
-        <button type="button" class="hero__brand" id="heroHome" title="Start over — upload a new track" aria-label="MIXMASTER LA — reset and upload a new track">
-          MIXMASTER <span>LA</span>
+        <p class="hero__index reveal">Nº001 / Desk</p>
+        <div class="hero__marquee" aria-hidden="true">
+          <div class="hero__marquee-track">
+            <span>● MIXMASTER LA</span><span>● MIXMASTER LA</span><span>● MIXMASTER LA</span>
+            <span>● MIXMASTER LA</span><span>● MIXMASTER LA</span><span>● MIXMASTER LA</span>
+          </div>
+        </div>
+        <button type="button" class="hero__brand hover_effect reveal" id="heroHome" title="Start over — upload a new track" aria-label="MIXMASTER LA — reset and upload a new track">
+          MIXMASTER<span>LA</span>
         </button>
-        <p class="hero__eyebrow">After hours · Downtown glow · Digital precision</p>
-        <h1 class="hero__title">
-          Your track,<br /><span>mastered for the night.</span>
+        <h1 class="hero__title reveal">
+          On–demand mix &amp; master<br />for the track in front of you.
         </h1>
-        <p class="hero__sub">
-          Upload a <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. The desk detects instruments,
-          diagnoses masking / peaks / transients, then <b>polishes</b> with genre playbooks
-          (EDM keeps low-end impact &amp; stereo width). Paste a YouTube / Spotify link or
-          upload lossless refs. Check <b>Studio</b> or <b>Car</b>. Near <b>&minus;14&nbsp;LUFS</b>.
+        <p class="hero__sub reveal">
+          Upload <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. The desk listens like a genre engineer —
+          instruments, masking, peaks, transients — then polishes toward streaming delivery
+          near <b>&minus;14&nbsp;LUFS</b>. Optional references. Studio or car translation.
         </p>
-        <div class="hero__cta">
-          <a class="btn btn--primary" href="#dropCard">Load your record</a>
+        <div class="hero__cta reveal">
+          <a class="btn btn--primary hover_effect" href="#dropCard">Load your record <span aria-hidden="true">↗</span></a>
+          <span class="hero__scroll-hint">Scroll to open the desk</span>
         </div>
       </section>
 
       <!-- STEP 1: UPLOAD -->
-      <section class="card drop" id="dropCard">
-        <div class="card__glow"></div>
-        <div class="step">01 — Load your record</div>
-        <div class="dropzone" id="dropzone" tabindex="0" role="button"
+      <section class="panel reveal" id="dropCard">
+        <div class="panel__head">
+          <span class="panel__index">Nº002</span>
+          <h2 class="panel__title">Load your record</h2>
+        </div>
+        <div class="dropzone hover_effect" id="dropzone" tabindex="0" role="button"
              aria-label="Upload an audio file">
           <div class="dropzone__inner">
-            <div class="dropzone__icon">♪</div>
-            <p class="dropzone__title">Drop your audio here</p>
-            <p class="dropzone__hint">or click to browse — WAV · FLAC · MP3 · up to ~10&nbsp;min</p>
-            <button class="btn btn--ghost" type="button" id="browseBtn">Choose file</button>
+            <p class="dropzone__kicker">Drop audio</p>
+            <p class="dropzone__title">WAV · FLAC · MP3</p>
+            <p class="dropzone__hint">Click or drag — up to ~10&nbsp;min</p>
+            <button class="btn btn--ghost hover_effect" type="button" id="browseBtn">Choose file</button>
           </div>
           <input type="file" id="fileInput" accept=".wav,.flac,.mp3,audio/wav,audio/flac,audio/mpeg" hidden />
         </div>
@@ -82,13 +83,16 @@
             <div class="filecard__name" id="fileName">track.wav</div>
             <div class="filecard__sub" id="fileSub">—</div>
           </div>
-          <button class="btn btn--ghost btn--sm" id="clearBtn" type="button">Replace</button>
+          <button class="btn btn--ghost btn--sm hover_effect" id="clearBtn" type="button">Replace</button>
         </div>
       </section>
 
       <!-- STEP 2: DIRECTION -->
-      <section class="card" id="controlsCard">
-        <div class="step">02 — Set the direction</div>
+      <section class="panel reveal" id="controlsCard">
+        <div class="panel__head">
+          <span class="panel__index">Nº003</span>
+          <h2 class="panel__title">Set the direction</h2>
+        </div>
 
         <div class="ctl">
           <label class="ctl__label">Genre &amp; standard</label>
@@ -99,43 +103,43 @@
           <div class="ctl">
             <label class="ctl__label" for="targetLufs">Target loudness</label>
             <select class="select" id="targetLufs">
-              <option value="-14" selected>Streaming · &minus;14 LUFS (Spotify / YouTube / Tidal)</option>
+              <option value="-14" selected>Streaming · &minus;14 LUFS</option>
               <option value="-16">Apple / Podcast · &minus;16 LUFS</option>
               <option value="-9">Club / Loud · &minus;9 LUFS</option>
-              <option value="-23">Broadcast · &minus;23 LUFS (EBU R128)</option>
+              <option value="-23">Broadcast · &minus;23 LUFS</option>
             </select>
           </div>
           <div class="ctl">
-            <label class="ctl__label" for="dynamics">Intensity <span class="ctl__hint">(polish amount)</span></label>
+            <label class="ctl__label" for="dynamics">Intensity</label>
             <select class="select" id="dynamics">
-              <option value="open">Low — soft touch, more dynamics</option>
-              <option value="balanced" selected>Medium — light polish (no crush)</option>
-              <option value="punchy">High — louder, more compression</option>
+              <option value="open">Low — soft touch</option>
+              <option value="balanced" selected>Medium — light polish</option>
+              <option value="punchy">High — louder</option>
             </select>
           </div>
         </div>
 
         <div class="ctl-row">
           <div class="ctl">
-            <label class="ctl__label">Room mix <span class="ctl__hint">(translation)</span></label>
+            <label class="ctl__label">Room mix</label>
             <div class="room-toggle" id="roomToggle" role="group" aria-label="Room simulation">
-              <button type="button" class="room-btn is-active" data-room="studio">Studio</button>
-              <button type="button" class="room-btn" data-room="car">Car</button>
+              <button type="button" class="room-btn hover_effect is-active" data-room="studio">Studio</button>
+              <button type="button" class="room-btn hover_effect" data-room="car">Car</button>
             </div>
             <p class="ctl__hint" id="roomHint">Neutral nearfield — trusted mix room</p>
           </div>
           <div class="ctl">
-            <label class="ctl__label" for="refInput">Match similar tracks <span class="ctl__hint">(optional)</span></label>
+            <label class="ctl__label" for="refInput">Match similar tracks</label>
             <div class="ref-box">
               <input type="file" id="refInput" accept=".wav,.flac,.mp3,audio/wav,audio/flac,audio/mpeg" multiple hidden />
-              <button class="btn btn--ghost btn--sm" type="button" id="refBrowseBtn">Add file(s)</button>
-              <button class="btn btn--ghost btn--sm hidden" type="button" id="refClearBtn">Clear</button>
+              <button class="btn btn--ghost btn--sm hover_effect" type="button" id="refBrowseBtn">Add file(s)</button>
+              <button class="btn btn--ghost btn--sm hover_effect hidden" type="button" id="refClearBtn">Clear</button>
             </div>
             <div class="ref-url-row">
-              <input class="select ref-url" type="url" id="refUrlInput" placeholder="Or paste YouTube / Spotify / direct WAV·FLAC link…" />
-              <button class="btn btn--ghost btn--sm" type="button" id="refUrlBtn">Add link</button>
+              <input class="select ref-url" type="url" id="refUrlInput" placeholder="YouTube / Spotify / direct WAV·FLAC…" />
+              <button class="btn btn--ghost btn--sm hover_effect" type="button" id="refUrlBtn">Add link</button>
             </div>
-            <p class="ctl__hint" id="refHint">Analyzed first, then your track is pulled toward them. Prefer lossless WAV/FLAC.</p>
+            <p class="ctl__hint" id="refHint">Analyzed first. Prefer lossless WAV/FLAC.</p>
           </div>
         </div>
 
@@ -162,36 +166,42 @@
           </div>
         </div>
 
-        <button class="btn btn--primary btn--block" id="processBtn" type="button" disabled>
+        <button class="btn btn--primary btn--block hover_effect" id="processBtn" type="button" disabled>
           <span class="btn__label">Master my track</span>
         </button>
       </section>
 
       <!-- PROGRESS -->
-      <section class="card progress-card hidden" id="progressCard">
-        <div class="step">Working the console…</div>
+      <section class="panel progress-card hidden reveal" id="progressCard">
+        <div class="panel__head">
+          <span class="panel__index">Nº · Live</span>
+          <h2 class="panel__title">Working the console</h2>
+        </div>
         <div class="progress">
           <div class="progress__bar" id="progressBar"></div>
         </div>
-        <div class="progress__stage" id="progressStage">Warming up the tubes…</div>
+        <div class="progress__stage" id="progressStage">Listening…</div>
       </section>
 
       <!-- STEP 3: RESULT -->
-      <section class="card result hidden" id="resultCard">
-        <div class="step">03 — Your master</div>
+      <section class="panel result hidden reveal" id="resultCard">
+        <div class="panel__head">
+          <span class="panel__index">Nº004</span>
+          <h2 class="panel__title">Your master</h2>
+        </div>
 
         <div class="ab">
           <div class="ab__toggle" role="tablist">
-            <button class="ab__btn is-active" id="abOriginal" role="tab">Original</button>
-            <button class="ab__btn" id="abMastered" role="tab">Mastered</button>
+            <button class="ab__btn hover_effect is-active" id="abOriginal" role="tab">Original</button>
+            <button class="ab__btn hover_effect" id="abMastered" role="tab">Mastered</button>
           </div>
           <div class="listen-room" id="listenRoom" role="group" aria-label="Listen room">
             <span class="listen-room__label">Listen in</span>
-            <button type="button" class="room-btn is-active" data-listen="studio">Studio</button>
-            <button type="button" class="room-btn" data-listen="car">Car</button>
+            <button type="button" class="room-btn hover_effect is-active" data-listen="studio">Studio</button>
+            <button type="button" class="room-btn hover_effect" data-listen="car">Car</button>
           </div>
           <div class="transport">
-            <button class="btn btn--round" id="playBtn" aria-label="Play / pause">▶</button>
+            <button class="btn btn--round hover_effect" id="playBtn" aria-label="Play / pause">▶</button>
             <div class="scrub"><div class="scrub__fill" id="scrubFill"></div></div>
             <span class="time" id="timeLabel">0:00 / 0:00</span>
           </div>
@@ -204,17 +214,16 @@
 
         <div class="analysis" id="analysisNotes"></div>
 
-        <button class="btn btn--primary btn--block" id="downloadBtn" type="button">
-          <span class="btn__label">Download master</span>
+        <button class="btn btn--primary btn--block hover_effect" id="downloadBtn" type="button">
+          <span class="btn__label">Download master <span aria-hidden="true">↗</span></span>
         </button>
         <p class="result__note" id="downloadNote"></p>
       </section>
 
       <footer class="footnote">
         <p>
-          MIXMASTER LA runs entirely on your device — your audio never leaves the
-          browser. Built with the Web Audio API, an ITU-R BS.1770 loudness engine,
-          and true-peak limiting. After hours in Los Angeles.
+          <span class="brand__dot">●</span> MIXMASTER LA — audio never leaves the browser.
+          ITU-R BS.1770 · true-peak limiting · Los Angeles.
         </p>
       </footer>
     </main>
