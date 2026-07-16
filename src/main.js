@@ -8,6 +8,7 @@ import { fetchReferenceFromUrl, qualityBadge } from './audio/fetchReference.js';
 import { encodeBuffer, EXTENSIONS } from './encode/index.js';
 import { drawWaveform, drawSpectrum } from './ui/visualizer.js';
 import { ABPlayer } from './ui/player.js';
+import { LivePeakMeter } from './ui/peakMeter.js';
 import { initCursor } from './ui/cursor.js';
 import { initTidewave } from './ui/tidewave.js';
 import {
@@ -358,6 +359,14 @@ const player = new ABPlayer({
   onEnd: () => { $('playBtn').textContent = '▶'; },
 });
 
+const peakMeter = new LivePeakMeter({
+  root: $('peakMeter'),
+  getPeakLin: () => player.getPeakLin(),
+  isPlaying: () => player.playing,
+  ceilingDb: -1.0,
+});
+peakMeter.start();
+
 let currentView = 'original';
 function drawCurrentWave() {
   if (!state.result) return;
@@ -378,18 +387,22 @@ function meterCard(label, value, unit, delta) {
   </div>`;
 }
 
-function renderMeters(before, after, target) {
+function renderMeters(before, after, target, ceilingDb = -1.0) {
   const d = (v) => (isFinite(v) ? v.toFixed(1) : '—');
   const lufsDelta = isFinite(after.lufs) && isFinite(before.lufs)
     ? `<div class="meter__delta ${after.lufs > before.lufs ? 'up' : 'down'}">
         from ${d(before.lufs)} LUFS</div>` : '';
   const onTarget = isFinite(after.lufs) && Math.abs(after.lufs - target) <= 0.7;
   const widthPct = Math.round((after.stereo.width || 0) * 100);
+  const tpOk = isFinite(after.truePeakDb) && after.truePeakDb <= ceilingDb + 0.05;
+  const tpHot = isFinite(after.truePeakDb) && after.truePeakDb > ceilingDb - 0.5;
   $('meters').innerHTML = [
     meterCard('Integrated loudness', d(after.lufs), ' LUFS',
       lufsDelta + (onTarget ? '<div class="meter__delta up">✓ on target</div>' : '')),
     meterCard('True peak', d(after.truePeakDb), ' dBTP',
-      `<div class="meter__delta ${after.truePeakDb <= -0.9 ? 'up' : 'down'}">ceiling polish</div>`),
+      `<div class="meter__delta ${tpOk ? 'up' : 'down'}">${
+        tpOk ? `under ${ceilingDb.toFixed(1)} ceiling` : tpHot ? 'near / over ceiling' : 'check peaks'
+      }</div>`),
     meterCard('Dynamics (crest)', d(after.crest), ' dB',
       `<div class="meter__delta">was ${d(before.crest)} dB</div>`),
     meterCard('Stereo width', widthPct, ' %',
@@ -476,7 +489,10 @@ function showResults(result) {
 
   drawCurrentWave();
   drawSpectrum($('spectrumCanvas'), result.before, result.after);
-  renderMeters(result.before, result.after, result.settings.targetLufs);
+  const ceilingDb = result.plan?.peak?.ceilingDb ?? -1.0;
+  peakMeter.setCeiling(ceilingDb);
+  peakMeter.reset();
+  renderMeters(result.before, result.after, result.settings.targetLufs, ceilingDb);
   renderNotes(result);
 
   const sizeKB = (state.outputBlob.size / 1024).toFixed(0);
@@ -536,6 +552,7 @@ function bindResultControls() {
     $('abOriginal').classList.add('is-active');
     $('abMastered').classList.remove('is-active');
     player.switchTo('original');
+    peakMeter.reset();
     drawCurrentWave();
   });
   $('abMastered').addEventListener('click', () => {
@@ -543,6 +560,7 @@ function bindResultControls() {
     $('abMastered').classList.add('is-active');
     $('abOriginal').classList.remove('is-active');
     player.switchTo('mastered');
+    peakMeter.reset();
     drawCurrentWave();
   });
   $('playBtn').addEventListener('click', () => {

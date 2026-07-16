@@ -1,5 +1,6 @@
 // Small A/B audio player driven by two AudioBuffers sharing one timeline.
 // Optional room listen EQ (studio / car) for translation audition.
+// Taps a dry analyser for live peak metering (program peak, before room EQ).
 import { getRoom } from '../audio/rooms.js';
 
 export class ABPlayer {
@@ -9,6 +10,9 @@ export class ABPlayer {
     this.which = 'original';
     this.source = null;
     this.roomNode = null;
+    this.analyser = null;
+    this.meterSink = null;
+    this._peakBuf = null;
     this.startedAt = 0;
     this.offset = 0;
     this.playing = false;
@@ -21,6 +25,31 @@ export class ABPlayer {
   _ensureCtx() {
     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  _ensureMeterTap() {
+    if (this.analyser) return;
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 2048;
+    this.analyser.smoothingTimeConstant = 0;
+    // Keep analyser in the graph without contributing audible output
+    this.meterSink = this.ctx.createGain();
+    this.meterSink.gain.value = 0;
+    this.analyser.connect(this.meterSink);
+    this.meterSink.connect(this.ctx.destination);
+    this._peakBuf = new Float32Array(this.analyser.fftSize);
+  }
+
+  /** Instantaneous sample peak (linear 0..∞) of the dry program. */
+  getPeakLin() {
+    if (!this.analyser || !this._peakBuf) return 0;
+    this.analyser.getFloatTimeDomainData(this._peakBuf);
+    let peak = 0;
+    for (let i = 0; i < this._peakBuf.length; i++) {
+      const a = Math.abs(this._peakBuf[i]);
+      if (a > peak) peak = a;
+    }
+    return peak;
   }
 
   setBuffers(original, mastered) {
@@ -48,6 +77,10 @@ export class ABPlayer {
   }
 
   _buildRoomChain(source) {
+    this._ensureMeterTap();
+    // Dry tap for peak meter (program peaks, not car-EQ inflated)
+    source.connect(this.analyser);
+
     const room = getRoom(this.roomId);
     const filters = room.listenEq || [];
     if (!filters.length) {

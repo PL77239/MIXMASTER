@@ -1093,6 +1093,90 @@ input[type="range"]::-moz-range-thumb {
   position: relative;
 }
 
+/* Live peak meter (preview / redline) */
+.peaklive-wrap {
+  margin: 14px 0 18px;
+}
+.peaklive {
+  --peak-ok: #1f7a4c;
+  --peak-warn: #8a5a12;
+  --peak-hot: #a33b1a;
+  --peak-clip: #b01030;
+  padding: 12px 14px;
+  background: var(--band-surface, #fff);
+  border: 1px solid var(--band-line, var(--line));
+}
+.peaklive__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--band-fg-faint, var(--ink-faint));
+}
+.peaklive__status {
+  font-weight: 600;
+  color: var(--band-fg-soft, var(--ink-soft));
+}
+.peaklive[data-status="ok"] .peaklive__status { color: var(--peak-ok); }
+.peaklive[data-status="warn"] .peaklive__status { color: var(--peak-warn); }
+.peaklive[data-status="hot"] .peaklive__status { color: var(--peak-hot); }
+.peaklive[data-status="clip"] .peaklive__status { color: var(--peak-clip); }
+.peaklive__bar {
+  position: relative;
+  height: 12px;
+  background: rgba(18, 18, 18, 0.08);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.band--paper .peaklive__bar,
+.band--wash .peaklive__bar { background: rgba(18, 18, 18, 0.1); }
+.band--navy .peaklive__bar,
+.band--ink .peaklive__bar { background: rgba(255, 255, 255, 0.12); }
+.peaklive__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: linear-gradient(90deg, var(--peak-ok), #3d8f5c 55%, var(--peak-warn) 78%, var(--peak-hot) 90%, var(--peak-clip));
+  transition: width 0.04s linear;
+}
+.peaklive[data-status="clip"] .peaklive__fill {
+  background: var(--peak-clip);
+}
+.peaklive__hold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  left: 0%;
+  background: var(--band-fg, var(--ink));
+  opacity: 0.85;
+}
+.peaklive__ceil {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  left: 0%;
+  background: var(--peak-clip);
+  opacity: 0.7;
+  box-shadow: 0 0 0 1px rgba(176, 16, 48, 0.25);
+}
+.peaklive__readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--band-fg-soft, var(--ink-soft));
+}
+.peaklive__readout b { color: var(--band-fg, var(--ink)); font-weight: 600; }
+
 .meters {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

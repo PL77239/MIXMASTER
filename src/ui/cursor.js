@@ -23,6 +23,8 @@ const SKIP_SELECTOR = [
   '.progress__stage',
   '.meters',
   '.meter',
+  '.peaklive',
+  '.peaklive-wrap',
   '.analysis',
   '.result-media',
   '.ab',

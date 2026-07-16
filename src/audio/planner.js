@@ -631,15 +631,16 @@ export function planSession(diag, settings) {
     (isFinite(settings._truePeakDb) && settings._truePeakDb > -0.3);
 
   let ceilingDb = scale.ceilingDb;
-  let tpMarginDb = 1.0;
+  let tpMarginDb = 1.25;
   if (bassHeavy) {
-    ceilingDb = Math.min(ceilingDb, -1.3);
-    tpMarginDb = 1.45;
+    // 808 / protect-low-end: leave real intersample room (sample limit ≠ true peak)
+    ceilingDb = Math.min(ceilingDb, -1.5);
+    tpMarginDb = 2.1;
     softClip = true;
   }
   if (scale.label === 'Punch' && bassHeavy) {
-    ceilingDb = Math.min(ceilingDb, -1.4);
-    tpMarginDb = 1.55;
+    ceilingDb = Math.min(ceilingDb, -1.6);
+    tpMarginDb = 2.35;
   }
 
   const targetLufs = refProfile
@@ -690,7 +691,7 @@ export function planSession(diag, settings) {
     skipHeavyRemould: true,
     peak: {
       softClip,
-      softClipDb: bassHeavy ? -0.85 : -0.5,
+      softClipDb: bassHeavy ? -1.25 : -0.7,
       ceilingDb,
       tpMarginDb,
       targetLufs,
