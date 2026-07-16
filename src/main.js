@@ -215,29 +215,36 @@ function renderMeters(before, after, target) {
 }
 
 function renderNotes(result) {
-  const { before, after, corrective, gainDb, genre, settings } = result;
+  const { corrective, gainDb, genre, settings, regionsBefore, regionsAfter } = result;
   const intensityLabel = {
     open: 'Low', balanced: 'Medium', punchy: 'High',
   }[settings.dynamicsProfile] || settings.dynamicsProfile;
   const moves = corrective.length
     ? corrective.map((m) => `<li><b>${m.band}</b> (${Math.round(m.freq)} Hz):
-        ${m.gain > 0 ? '+' : ''}${m.gain.toFixed(1)} dB</li>`).join('')
-    : '<li>Spectrum already close — only gentle haze cleanup applied.</li>';
+        ${m.gain > 0 ? '+' : ''}${m.gain.toFixed(1)} dB
+        ${m.detail ? `<span style="opacity:.7"> · ${m.detail}</span>` : ''}</li>`).join('')
+    : '<li>Already close to ANALYZE balance target — light polish only.</li>';
+
+  const fmtR = (r) => r
+    ? `sub ${(r.sub * 100).toFixed(0)}% · bass ${(r.bass * 100).toFixed(0)}% · low-mid ${(r.lowMid * 100).toFixed(0)}% · mid ${(r.mid * 100).toFixed(0)}% · high ${(r.high * 100).toFixed(0)}% · air ${(r.air * 100).toFixed(0)}%`
+    : '—';
 
   $('analysisNotes').innerHTML = `
-    <h4>Clarity EQ moves <span style="font-weight:400;text-transform:none;letter-spacing:0">(subtractive-first)</span></h4>
+    <h4>ANALYZE-balanced EQ</h4>
     <ul>${moves}</ul>
+    <h4>Spectral fractions</h4>
+    <ul>
+      <li>Before: ${fmtR(regionsBefore)}</li>
+      <li>After: ${fmtR(regionsAfter)}</li>
+      <li>Target: sub 8% · bass 28% · low-mid 20% · mid 26% · high 13% · air 5%</li>
+    </ul>
     <h4>Mastering chain</h4>
     <ul>
-      <li>Genre: <b>${genre.label}</b> · Mixea-style Intensity
-        <b>${intensityLabel}</b></li>
-      <li>Mud / masking cleanup in <b>200–500 Hz</b>, then light genre tone</li>
-      <li>4-band dynamics on <b>bass / low-mid / mid / highs</b>
-        (crossovers ${genre.dynamics.crossovers.join(' / ')} Hz), soft makeup</li>
-      <li>Dolby-inspired M/S: <b>mono bass</b>, side mud cut, controlled width
-        (${settings.width}%)</li>
-      <li>Light bus glue + soft saturation · normalized
-        <b>${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB</b>
+      <li>Genre: <b>${genre.label}</b> · Mixea Intensity <b>${intensityLabel}</b>
+        (preserves ANALYZE dynamics window)</li>
+      <li>EQ matched to ANALYZE modern-master balance + light genre tint</li>
+      <li>Stereo width steered into ANALYZE sweet spot · bass kept mono</li>
+      <li>Normalized <b>${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB</b>
         → <b>${settings.targetLufs} LUFS</b> · ceiling <b>&minus;1 dBTP</b></li>
     </ul>`;
 }

@@ -23,18 +23,16 @@ bass, anti-masking) — not proprietary Dolby or Mixea code.
      gating). Calibration verified against `pyloudnorm` (within ~0.05 LU).
    - **Spectral balance** across 8 bands (sub → air) via FFT.
    - **Dynamics** (crest factor), **sample/true peak**, and **stereo** width.
-2. **Subtractive-first clarity EQ** — cuts the 200–500 Hz mud/boxiness zone
-   before any boosts; content matching is capped gently so the track is not
-   remoulded into a different genre.
-3. **Mixea-style Intensity** — Low / Medium / High scales compression amount
-   (and backs off further if the source is already squashed).
-4. **Stem-aware dynamics** — a light 4-band compressor treats **bass**,
-   **low-mid (drum body)**, **mids (vocals/instrumental)** and **highs**
-   separately, with soft makeup so bands don’t stack into haze.
-5. **Dolby-inspired Mid/Side** — vocal presence on the mid channel; sides get
-   a steep high-pass + mud cut so **bass stays mono** and width stays clean.
-6. **Light glue + soft saturation**, then **loudness normalization** to the
-   target LUFS and a **look-ahead true-peak limiter** at −1 dBTP.
+2. **ANALYZE-balanced EQ** — matches the spectral proportions used by the
+   companion [ANALYZE](https://pl77239.github.io/ANALYZE/) mix scorer
+   (sub/bass/low-mid/mid/high/air), with a light genre tint. Two EQ passes
+   close the gap without crushing the source.
+3. **Mixea-style Intensity** — Low / Medium / High. Medium preserves dynamics
+   (ANALYZE rewards crest ~6–16 dB); High adds light multiband.
+4. **Stereo width** steered into ANALYZE’s sweet spot; bass stays mono.
+5. **Light glue / soft saturation** only when Intensity asks for it.
+6. **Loudness normalization** to the target LUFS + look-ahead **−1 dBTP**
+   limiter (ITU-R BS.1770).
 
 Output is re-encoded to the **same container** as the input:
 WAV (16/24-bit or 32-bit float), MP3 (via LAME), or FLAC (via libFLAC).

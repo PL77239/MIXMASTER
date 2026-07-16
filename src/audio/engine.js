@@ -1,5 +1,7 @@
+import { FFT, hann } from './fft.js';
+import { ANALYZE_BAND_EDGES, tintedTarget, ANALYZE_DYNAMICS } from './analyzeTargets.js';
 import { GENRES } from './genres.js';
-import { BANDS, analyzeBuffer } from './analyze.js';
+import { analyzeBuffer } from './analyze.js';
 import { measureLoudness } from './lufs.js';
 import { limit, applyGainDb } from './limiter.js';
 import {
@@ -11,152 +13,206 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
 /*
- * Mastering philosophy (inspired by published Mixea + Dolby practices —
- * not their proprietary code):
+ * Mastering optimised for PL77239/ANALYZE mix score:
+ *   score = 10 * (0.34*balance + 0.30*dynamics + 0.18*clip + 0.18*stereo)
  *
- * Mixea: Intensity (= compression amount) × EQ tone (warmer ↔ brighter);
- *        bass polish, stereo enhancement, EQ, limiting, loudness — light touch.
+ * balance  → match ANALYZE spectral proportions (genre = light tint)
+ * dynamics → preserve crest (~8–12 dB) and DR; compress only when Intensity=High
+ * clip     → −1 dBTP ceiling
+ * stereo   → keep side/(mid+side) in ~0.05–0.28; don't crush width
  *
- * Dolby Music / Atmos mastering guidance (stereo-relevant bits):
- *        prevent masking, preserve dynamics, mono-safe low end, clarity over
- *        colour, true-peak ≤ −1 dBTP, ITU-R BS.1770 loudness discipline.
- *
- * Practical translation here:
- *  1. Subtractive-first EQ (cut mud 200–500 Hz before any boosts)
- *  2. Very gentle content matching (±1.5 dB), never remould the spectrum
- *  3. Mixea-style Intensity scales compression, not tonal identity
- *  4. Mid/Side: bass stays mono; sides get mud cut + air — no low-mid haze
- *  5. Minimal makeup / saturation so the sum stays clean, not "all over"
+ * Mixea Intensity maps to how much we touch dynamics — Medium is intentionally
+ * soft so ANALYZE doesn't punish crushed masters. Dolby guidance still applies
+ * for loudness (BS.1770) and true-peak.
  */
 
-// Mixea-style Intensity → compression amount. "balanced" is intentionally soft.
-function applyIntensity(dyn, profile, crestDb) {
-  const out = JSON.parse(JSON.stringify(dyn));
-  // Already-squashed sources get even less processing (Dolby: preserve dynamics).
-  const alreadyLoud = crestDb < 7 ? 0.65 : crestDb < 10 ? 0.85 : 1;
-
-  let ratioMul = 0.85;
-  let threshAdd = -2;
-  let satMul = 0.7;
-  let glueMul = 0.85;
-  if (profile === 'open') {
-    // Mixea "Low Intensity"
-    ratioMul = 0.55; threshAdd = -6; satMul = 0.4; glueMul = 0.55;
-  } else if (profile === 'punchy') {
-    // Mixea "High Intensity"
-    ratioMul = 1.15; threshAdd = 1; satMul = 1.0; glueMul = 1.1;
+function monoFromChannels(channels) {
+  if (channels.length === 1) return channels[0];
+  const n = channels[0].length;
+  const m = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let c = 0; c < channels.length; c++) s += channels[c][i];
+    m[i] = s / channels.length;
   }
-
-  ratioMul *= alreadyLoud;
-  glueMul *= alreadyLoud;
-  satMul *= alreadyLoud;
-
-  for (const b of out.bands) {
-    b.ratio = 1 + (b.ratio - 1) * ratioMul;
-    b.threshold = clamp(b.threshold + threshAdd, -48, -8);
-  }
-  out.glue.ratio = 1 + (out.glue.ratio - 1) * glueMul;
-  out.glue.threshold = clamp(out.glue.threshold + threshAdd, -36, -8);
-  out.saturation = clamp(out.saturation * satMul, 0, 0.35);
-  return out;
+  return m;
 }
 
-// Mixea-style EQ tone from warmth/brightness sliders (warmer ↔ brighter).
-function mixeaTone(s) {
-  // warmth>0 → warmer bass; brightness>0 → clearer top / vocal air
+/** Same region fractions ANALYZE uses in frequencyBalance(). */
+export function measureRegions(channels, sampleRate) {
+  const mono = monoFromChannels(channels);
+  const size = 2048;
+  const hop = 512;
+  const fft = new FFT(size);
+  const win = hann(size);
+  const edges = [...ANALYZE_BAND_EDGES, sampleRate / 2];
+  const nBands = edges.length - 1;
+  const binHz = sampleRate / size;
+  const binBand = new Int16Array(size / 2);
+  for (let b = 0; b < size / 2; b++) {
+    const f = b * binHz;
+    let band = nBands - 1;
+    for (let k = 0; k < nBands; k++) {
+      if (f >= edges[k] && f < edges[k + 1]) { band = k; break; }
+    }
+    binBand[b] = band;
+  }
+
+  const sum = new Float64Array(nBands);
+  const re = new Float32Array(size);
+  const im = new Float32Array(size);
+  const nFrames = Math.max(0, Math.floor((mono.length - size) / hop) + 1);
+  const stride = Math.max(1, Math.floor(nFrames / 200));
+  let frames = 0;
+  for (let fi = 0; fi < nFrames; fi += stride) {
+    const off = fi * hop;
+    for (let i = 0; i < size; i++) {
+      re[i] = mono[off + i] * win[i];
+      im[i] = 0;
+    }
+    fft.transform(re, im);
+    for (let b = 1; b < size / 2; b++) {
+      const mag2 = re[b] * re[b] + im[b] * im[b];
+      sum[binBand[b]] += mag2;
+    }
+    frames++;
+  }
+
+  let total = 0;
+  for (let b = 0; b < nBands; b++) total += sum[b];
+  total = total || 1e-9;
+  const frac = Array.from(sum, (s) => s / total);
   return {
-    lowShelfDb: s.warmth * 0.45 + s.bass * 0.55,
-    highShelfDb: s.brightness * 0.55,
-    presenceDb: s.vocal * 0.55 + s.brightness * 0.15,
-    mudBias: Math.max(0, -s.warmth * 0.25), // warmer → keep a touch more body
+    sub: frac[0],
+    bass: frac[1] + frac[2],
+    lowMid: frac[3],
+    mid: frac[4] + frac[5],
+    high: frac[6] + frac[7],
+    air: frac[8] + frac[9],
+  };
+}
+
+function stereoWidth(channels) {
+  if (channels.length < 2) return { width: 0, correlation: 1 };
+  const L = channels[0], R = channels[1];
+  let sLR = 0, sLL = 0, sRR = 0, midE = 0, sideE = 0;
+  const n = Math.min(L.length, R.length);
+  for (let i = 0; i < n; i += 2) {
+    const l = L[i], r = R[i];
+    sLR += l * r; sLL += l * l; sRR += r * r;
+    const mid = (l + r) * 0.5, sd = (l - r) * 0.5;
+    midE += mid * mid; sideE += sd * sd;
+  }
+  return {
+    width: midE + sideE > 0 ? sideE / (midE + sideE) : 0,
+    correlation: sLL > 0 && sRR > 0 ? sLR / Math.sqrt(sLL * sRR) : 1,
   };
 }
 
 /**
- * Content-aware EQ — subtractive-first.
- * Protects sub/bass foundation; concentrates cuts in the 200–500 Hz mud zone.
+ * Build EQ moves that close the gap to ANALYZE's spectral target.
+ * gainDb ≈ 20*log10(target/current) * strength, capped per region.
  */
-function correctiveEQ(analysis, genre, tone) {
-  const measured = analysis.bands.map((b) => b.db);
-  const meanMeasured = measured.reduce((a, b) => a + b, 0) / measured.length;
-  const meanTarget = genre.target.reduce((a, b) => a + b, 0) / genre.target.length;
-
-  const strength = 0.16;
+function balanceMoves(regions, target, tone) {
   const moves = [];
+  const strength = 0.45; // close enough without overshooting
+  const specs = [
+    { key: 'sub', freq: 40, q: 0.7, type: 'lowshelf', maxCut: 4, maxBoost: 1.5 },
+    { key: 'bass', freq: 110, q: 0.8, type: 'lowshelf', maxCut: 3.5, maxBoost: 1.5 },
+    { key: 'lowMid', freq: 350, q: 0.85, type: 'peak', maxCut: 3, maxBoost: 2.5 },
+    { key: 'mid', freq: 1000, q: 0.9, type: 'peak', maxCut: 2, maxBoost: 3.5 },
+    { key: 'high', freq: 4500, q: 0.9, type: 'peak', maxCut: 2, maxBoost: 3.0 },
+    { key: 'air', freq: 11000, q: 0.7, type: 'highshelf', maxCut: 2, maxBoost: 3.5 },
+  ];
 
-  const rel = measured.map((db) => db - meanMeasured);
-  const tgt = genre.target.map((db) => db - meanTarget);
+  for (const s of specs) {
+    const cur = Math.max(regions[s.key], 1e-6);
+    const tgt = target[s.key];
+    let gain = 20 * Math.log10(tgt / cur) * strength;
+    // User tone bias (Mixea warmer/brighter)
+    if (s.key === 'sub' || s.key === 'bass') gain += tone.lowShelfDb * 0.5;
+    if (s.key === 'air' || s.key === 'high') gain += tone.highShelfDb * 0.5;
+    if (s.key === 'mid' || s.key === 'high') gain += tone.presenceDb * 0.35;
 
-  // How muddy are we? low-mid vs average of bass + presence
-  const mudExcess = rel[2] - 0.5 * (rel[1] + rel[5]);
+    if (gain > 0) gain = Math.min(gain, s.maxBoost);
+    else gain = Math.max(gain, -s.maxCut);
 
-  for (let i = 0; i < BANDS.length; i++) {
-    const b = BANDS[i];
-    let gain = (tgt[i] - rel[i]) * strength;
-
-    // Band-specific caps — never gut the foundation to "match" a curve
-    let maxBoost = 1.0;
-    let maxCut = 1.5;
-    if (i <= 1) { maxBoost = 0.8; maxCut = 0.8; }       // sub / bass
-    else if (i === 2) { maxBoost = 0; maxCut = 2.8; }    // low-mid = mud only
-    else if (i >= 6) { maxBoost = 1.0; maxCut = 1.0; }   // brilliance / air
-
-    if (gain > 0) gain = Math.min(gain, maxBoost);
-    else gain = Math.max(gain, -maxCut);
-
-    // If mud is the problem, don't also carve sub/bass
-    if (i <= 1 && mudExcess > 0.5 && gain < 0) gain *= 0.35;
-
-    if (Math.abs(gain) < 0.25) continue;
-    const freq = Math.sqrt(b.lo * b.hi);
-    const q = i === 2 ? 0.85 : (i <= 1 || i >= BANDS.length - 1 ? 0.75 : 1.0);
-    moves.push({ freq, gain, q, band: b.label });
+    // Skip tiny moves
+    if (Math.abs(gain) < 0.3) continue;
+    moves.push({
+      key: s.key,
+      freq: s.freq,
+      gain,
+      q: s.q,
+      type: s.type,
+      band: s.key,
+      cur: +cur.toFixed(3),
+      tgt: +tgt.toFixed(3),
+    });
   }
-
-  // Focused mud / boxiness cuts — the real clarity move
-  let mudCut = -1.0;
-  if (mudExcess > 0.3) mudCut = clamp(-(1.2 + mudExcess * 0.7), -3.2, -1.0);
-  mudCut -= tone.mudBias;
-  moves.push({ freq: 260, gain: mudCut, q: 0.75, band: 'Mud (low-mid)' });
-  moves.push({ freq: 400, gain: mudCut * 0.65, q: 0.95, band: 'Boxiness' });
-
   return moves;
 }
 
-// ---- Pass 1: clarity EQ (HP → mud cuts → light character → Mixea tone) ----
-function tonePass(inputBuffer, genre, s, corrective, tone) {
+function mixeaTone(s) {
+  return {
+    lowShelfDb: s.warmth * 0.4 + s.bass * 0.45,
+    highShelfDb: s.brightness * 0.5,
+    presenceDb: s.vocal * 0.5 + s.brightness * 0.12,
+  };
+}
+
+// Mixea Intensity → how much dynamics we touch. Medium preserves ANALYZE crest/DR.
+function intensityPlan(profile, crest) {
+  // If already crushed, don't crush further.
+  const soft = crest < 8;
+  if (profile === 'open') {
+    return { multiband: false, glue: false, sat: 0.04, widthBias: 0.02 };
+  }
+  if (profile === 'punchy') {
+    return {
+      multiband: !soft,
+      glue: true,
+      sat: soft ? 0.08 : 0.14,
+      widthBias: 0.0,
+      glueParams: { threshold: -18, ratio: 1.8, attack: 0.025, release: 0.2 },
+      mbScale: soft ? 0.5 : 1.0,
+    };
+  }
+  // balanced / Medium — light glue only, no multiband stack
+  return {
+    multiband: false,
+    glue: !soft,
+    sat: 0.06,
+    widthBias: 0.03,
+    glueParams: { threshold: -22, ratio: 1.45, attack: 0.04, release: 0.28 },
+  };
+}
+
+function tonePass(inputBuffer, moves, genre) {
   return renderGraph(inputBuffer, (ctx, source) => {
     const nodes = [source];
-    // Rumble cleanup (always)
-    nodes.push(highpass(ctx, Math.max(24, genre.character.hpHz)));
+    nodes.push(highpass(ctx, Math.max(22, genre.character.hpHz * 0.85)));
 
-    // Genre character — scaled down so it never dominates
-    const charScale = 0.55;
-    nodes.push(lowShelf(ctx, genre.character.lowShelf.f,
-      genre.character.lowShelf.g * charScale + tone.lowShelfDb));
-    for (const p of genre.character.peaks) {
-      nodes.push(peaking(ctx, p.f, p.g * charScale, p.q));
+    for (const m of moves) {
+      if (m.type === 'lowshelf') nodes.push(lowShelf(ctx, m.freq, m.gain));
+      else if (m.type === 'highshelf') nodes.push(highShelf(ctx, m.freq, m.gain));
+      else nodes.push(peaking(ctx, m.freq, m.gain, m.q));
     }
-
-    // Content-aware + mandatory mud cuts
-    for (const m of corrective) nodes.push(peaking(ctx, m.freq, m.gain, m.q));
-
-    // Mixea-style presence / air
-    if (Math.abs(tone.presenceDb) > 0.05) {
-      nodes.push(peaking(ctx, 3000, tone.presenceDb, 1.0));
-    }
-    nodes.push(highShelf(ctx, genre.character.highShelf.f,
-      genre.character.highShelf.g * charScale + tone.highShelfDb));
-
     return chain(nodes);
   });
 }
 
-// ---- Pass 2: 4-band dynamics (gentle makeup — was a major mud source) ----
-function multibandPass(inputBuffer, dyn) {
-  const [c0, c1, c2] = dyn.crossovers;
-  // 24 dB/oct Linkwitz-Riley style (cascaded 12 dB filters)
-  const bandDefs = [
+// Multiband only on High intensity — kept light so ANALYZE dynamics don't tank.
+function multibandPass(inputBuffer, genre, scale = 1) {
+  const [c0, c1, c2] = genre.dynamics.crossovers;
+  const bands = genre.dynamics.bands.map((b) => ({
+    threshold: b.threshold - 2,
+    ratio: 1 + (b.ratio - 1) * 0.55 * scale,
+    attack: b.attack,
+    release: b.release,
+    knee: 8,
+  }));
+  const defs = [
     { lp: [c0, c0] },
     { hp: [c0, c0], lp: [c1, c1] },
     { hp: [c1, c1], lp: [c2, c2] },
@@ -165,38 +221,30 @@ function multibandPass(inputBuffer, dyn) {
   return renderGraph(inputBuffer, (ctx, source) => {
     const sum = gainNode(ctx, 1);
     for (let i = 0; i < 4; i++) {
-      const def = bandDefs[i];
+      const def = defs[i];
       const nodes = [source];
       if (def.hp) for (const f of def.hp) nodes.push(highpass(ctx, f));
       if (def.lp) for (const f of def.lp) nodes.push(lowpass(ctx, f));
-      nodes.push(compressor(ctx, dyn.bands[i]));
-      // Tiny makeup only — previous 0.35× factor stacked 4–6 dB/band → mud soup
-      const makeupDb = clamp(
-        Math.abs(dyn.bands[i].threshold) * (1 - 1 / dyn.bands[i].ratio) * 0.1,
-        0, 1.8,
-      );
-      nodes.push(gainNode(ctx, dbToLin(makeupDb)));
+      nodes.push(compressor(ctx, bands[i]));
+      nodes.push(gainNode(ctx, dbToLin(0.4)));
       chain(nodes).connect(sum);
     }
     return sum;
   });
 }
 
-// ---- Pass 3: Dolby-style M/S clarity (mono bass, side mud cut, controlled width) ----
-async function midSidePass(inputBuffer, genre, dyn, s, tone) {
+async function midSidePass(inputBuffer, plan, userWidth, st) {
   const fs = inputBuffer.sampleRate;
-  // Cap width so "wide" never becomes a diffuse haze
-  const widthFactor = clamp((s.width / 100) * (dyn.width || 1), 0.7, 1.2);
-  const presence = clamp(dyn.midPresence * 0.45 + tone.presenceDb * 0.5, -1.5, 2.0);
+  if (inputBuffer.numberOfChannels < 2) return inputBuffer;
 
-  if (inputBuffer.numberOfChannels < 2) {
-    return renderGraph(inputBuffer, (ctx, source) =>
-      chain([
-        source,
-        peaking(ctx, 280, -1.0, 0.8),
-        peaking(ctx, 3000, presence, 1.0),
-      ]));
-  }
+  // Target ANALYZE stereo width (side/(mid+side))
+  let targetW = ANALYZE_DYNAMICS.widthSweet + plan.widthBias;
+  targetW = clamp(targetW * (userWidth / 100), 0.06, 0.3);
+  const curW = st.width;
+  // Scale side so resulting width ≈ target: w = s/(m+s) => s/m = w/(1-w)
+  const curRatio = curW > 1e-6 ? curW / (1 - curW) : 0.02;
+  const tgtRatio = targetW / (1 - targetW);
+  let sideScale = clamp(tgtRatio / Math.max(curRatio, 1e-4), 0.7, 1.8);
 
   const L = inputBuffer.getChannelData(0);
   const R = inputBuffer.getChannelData(1);
@@ -208,24 +256,19 @@ async function midSidePass(inputBuffer, genre, dyn, s, tone) {
     S[i] = 0.5 * (L[i] - R[i]);
   }
 
-  // Mid: keep punch/bass, light presence, gentle de-ess
-  const midOut = await renderGraph(makeBuffer([M], fs), (ctx, source) =>
-    chain([
-      source,
-      peaking(ctx, 280, -0.6, 0.9),
-      peaking(ctx, 3000, presence, 1.0),
-      highShelf(ctx, 7500, -dyn.deEss * 1.0),
-    ]));
-
-  // Side: kill bass + mud (anti-masking), leave air for width
+  // Keep bass mono: high-pass sides gently (not as aggressively as before)
   const sideOut = await renderGraph(makeBuffer([S], fs), (ctx, source) =>
     chain([
       source,
-      highpass(ctx, 180),
-      highpass(ctx, 180), // steeper mono-bass shelf
-      peaking(ctx, 320, -2.5, 0.8),
-      peaking(ctx, 500, -1.2, 1.0),
-      highShelf(ctx, 9000, 0.4 + Math.max(0, tone.highShelfDb) * 0.3),
+      highpass(ctx, 140),
+      peaking(ctx, 350, -0.8, 0.9),
+      highShelf(ctx, 9000, 0.4),
+    ]));
+  const midOut = await renderGraph(makeBuffer([M], fs), (ctx, source) =>
+    chain([
+      source,
+      peaking(ctx, 1000, 0.4, 0.9),
+      peaking(ctx, 3000, 0.3, 1.0),
     ]));
 
   const Mp = midOut.getChannelData(0);
@@ -233,84 +276,103 @@ async function midSidePass(inputBuffer, genre, dyn, s, tone) {
   const outL = new Float32Array(n);
   const outR = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    const sw = Sp[i] * widthFactor;
+    const sw = Sp[i] * sideScale;
     outL[i] = Mp[i] + sw;
     outR[i] = Mp[i] - sw;
   }
   return makeBuffer([outL, outR], fs);
 }
 
-// ---- Pass 4: light Mixea-style glue (never the star of the show) ----
-function gluePass(inputBuffer, dyn) {
-  return renderGraph(inputBuffer, (ctx, source) => {
-    const glue = compressor(ctx, {
-      ...dyn.glue,
-      knee: 8,
+function gluePass(inputBuffer, plan) {
+  if (!plan.glue) {
+    return renderGraph(inputBuffer, (ctx, source) => {
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = saturationCurve(plan.sat);
+      shaper.oversample = '2x';
+      return chain([source, shaper]);
     });
+  }
+  return renderGraph(inputBuffer, (ctx, source) => {
+    const glue = compressor(ctx, { ...plan.glueParams, knee: 10 });
     const shaper = ctx.createWaveShaper();
-    shaper.curve = saturationCurve(dyn.saturation);
+    shaper.curve = saturationCurve(plan.sat);
     shaper.oversample = '2x';
-    const makeupDb = clamp(
-      Math.abs(dyn.glue.threshold) * (1 - 1 / dyn.glue.ratio) * 0.12,
-      0, 2.0,
-    );
-    return chain([source, glue, shaper, gainNode(ctx, dbToLin(makeupDb))]);
+    return chain([source, glue, shaper, gainNode(ctx, dbToLin(0.6))]);
   });
 }
 
 export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   const genre = GENRES[settings.genre];
-  const dyn = applyIntensity(genre.dynamics, settings.dynamicsProfile, analysis.crest);
-  const s = {
-    warmth: settings.warmth, brightness: settings.brightness, bass: settings.bass,
-    vocal: settings.vocal, width: settings.width,
-  };
-  const tone = mixeaTone(s);
-  const target = settings.targetLufs;
-
+  const target = tintedTarget(settings.genre);
+  const tone = mixeaTone({
+    warmth: settings.warmth, brightness: settings.brightness,
+    bass: settings.bass, vocal: settings.vocal,
+  });
+  const plan = intensityPlan(settings.dynamicsProfile, analysis.crest);
   const report = (p, t) => onProgress && onProgress(p, t);
 
-  report(0.08, 'Mapping Mixea-style Intensity & scanning for mud…');
-  const corrective = correctiveEQ(analysis, genre, tone);
+  report(0.06, 'Measuring ANALYZE spectral balance…');
+  const channels = getChannelArrays(inputBuffer);
+  const regions = measureRegions(channels, inputBuffer.sampleRate);
+  const st = stereoWidth(channels);
   await yieldFrame();
 
-  report(0.22, 'Subtractive EQ — clearing 200–500 Hz haze…');
-  let buf = await tonePass(inputBuffer, genre, s, corrective, tone);
+  report(0.18, 'Matching modern-master balance (ANALYZE target)…');
+  let moves = balanceMoves(regions, target, tone);
+  let buf = await tonePass(inputBuffer, moves, genre);
   await yieldFrame();
 
-  report(0.4, 'Gentle 4-band dynamics (bass / drums / mid / air)…');
-  buf = await multibandPass(buf, dyn);
+  // Second pass closes residual gap (EQ is not perfectly linear in energy %).
+  report(0.3, 'Refining spectral fractions…');
+  const midRegions = measureRegions(getChannelArrays(buf), buf.sampleRate);
+  const refine = balanceMoves(midRegions, target, { lowShelfDb: 0, highShelfDb: 0, presenceDb: 0 })
+    .map((m) => ({ ...m, gain: clamp(m.gain * 0.65, -2.5, 2.5) }))
+    .filter((m) => Math.abs(m.gain) >= 0.35);
+  if (refine.length) {
+    buf = await tonePass(buf, refine, genre);
+    moves = moves.concat(refine.map((m) => ({ ...m, band: m.band + ' (refine)' })));
+  }
   await yieldFrame();
 
-  report(0.58, 'Dolby-style M/S clarity — mono bass, clean sides…');
-  buf = await midSidePass(buf, genre, dyn, s, tone);
+  if (plan.multiband) {
+    report(0.4, 'High Intensity — light multiband control…');
+    buf = await multibandPass(buf, genre, plan.mbScale || 1);
+    await yieldFrame();
+  } else {
+    report(0.4, 'Preserving dynamics (ANALYZE crest/DR window)…');
+    await yieldFrame();
+  }
+
+  report(0.55, 'Stereo image — width into ANALYZE sweet spot…');
+  buf = await midSidePass(buf, plan, settings.width, st);
   await yieldFrame();
 
-  report(0.72, 'Light bus glue & soft saturation…');
-  buf = await gluePass(buf, dyn);
+  report(0.68, plan.glue ? 'Light Mixea-style glue…' : 'Soft saturation only…');
+  buf = await gluePass(buf, plan);
   await yieldFrame();
 
-  report(0.84, 'ITU-R BS.1770 loudness → target, −1 dBTP ceiling…');
+  report(0.82, 'ITU-R BS.1770 → target LUFS, −1 dBTP…');
   const fs = buf.sampleRate;
   const base = getChannelArrays(buf);
   const baseLufs = measureLoudness(base.map((c) => c), fs).integrated;
-  let gainDb = clamp(target - baseLufs, -18, 18);
+  let gainDb = clamp(settings.targetLufs - baseLufs, -16, 16);
   let limited = base;
-  let achieved = baseLufs;
   for (let iter = 0; iter < 3; iter++) {
     const work = base.map((c) => c.slice());
     applyGainDb(work, gainDb);
-    limited = limit(work, fs, -1.0, 80);
-    achieved = measureLoudness(limited.map((c) => c), fs).integrated;
-    const err = target - achieved;
+    // Gentler release to preserve crest a bit better
+    limited = limit(work, fs, -1.0, 100);
+    const achieved = measureLoudness(limited.map((c) => c), fs).integrated;
+    const err = settings.targetLufs - achieved;
     if (Math.abs(err) < 0.25) break;
-    gainDb = clamp(gainDb + err * 0.9, -18, 18);
+    gainDb = clamp(gainDb + err * 0.85, -16, 16);
     await yieldFrame();
   }
 
   report(0.94, 'Final metering…');
   const outBuffer = makeBuffer(limited, fs);
   const after = analyzeBuffer(outBuffer);
+  const afterRegions = measureRegions(getChannelArrays(outBuffer), fs);
   await yieldFrame();
 
   report(1, 'Master ready.');
@@ -318,7 +380,14 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
     buffer: outBuffer,
     before: analysis,
     after,
-    corrective,
+    corrective: moves.map((m) => ({
+      band: m.band,
+      freq: m.freq,
+      gain: m.gain,
+      detail: `${(m.cur * 100).toFixed(0)}% → ${(m.tgt * 100).toFixed(0)}%`,
+    })),
+    regionsBefore: regions,
+    regionsAfter: afterRegions,
     gainDb,
     genre,
     settings,
