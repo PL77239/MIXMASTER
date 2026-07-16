@@ -9,6 +9,7 @@ import { encodeBuffer, EXTENSIONS } from './encode/index.js';
 import { drawWaveform, drawSpectrum } from './ui/visualizer.js';
 import { ABPlayer } from './ui/player.js';
 import { initCursor, initReveals } from './ui/cursor.js';
+import { initTidewave } from './ui/tidewave.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -579,5 +580,6 @@ bindDropzone();
 bindResultControls();
 bindBrandHome();
 initCursor();
+initTidewave();
 initReveals();
 $('processBtn').addEventListener('click', runProcess);

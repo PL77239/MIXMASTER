@@ -44,7 +44,8 @@ body {
   cursor: none;
 }
 body.is-touch { cursor: auto; }
-body.is-touch .cursor { display: none !important; }
+body.is-touch .cursor,
+body.is-touch .cursor-glide { display: none !important; }
 
 ::selection {
   background: var(--accent);
@@ -62,43 +63,169 @@ body.is-touch .cursor { display: none !important; }
   mix-blend-mode: multiply;
 }
 
-/* ---------- Custom cursor (pxpush-style glide) ---------- */
+/* ---------- Custom cursor — tile field + glide (pxpush) ---------- */
+.cursor-gooey-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
 .cursor {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 98;
+  mix-blend-mode: difference;
+  opacity: 0;
+  transition: opacity 0.35s;
+  --columns: 18;
+  --size: calc(100vw / var(--columns));
+}
+.cursor.is-on { opacity: 1; }
+.cursor__inner {
+  display: grid;
+  grid-template-columns: repeat(var(--columns), var(--size));
+  width: 100%;
+  filter: url(#gooey);
+}
+.cursor__inner-box {
+  width: var(--size);
+  height: var(--size);
+  background: #fff;
+  opacity: 0;
+  transform: scale(0.35);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  will-change: opacity, transform;
+}
+.cursor__inner-box.is-lit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.cursor-glide {
   position: fixed;
   top: 0; left: 0;
   width: 12px; height: 12px;
   margin: -6px 0 0 -6px;
   pointer-events: none;
-  z-index: 100;
+  z-index: 99;
   mix-blend-mode: difference;
   opacity: 0;
   transition: opacity 0.3s;
 }
-.cursor.is-on { opacity: 1; }
-.cursor__dot {
+.cursor-glide.is-on { opacity: 1; }
+.cursor-glide .cursor__dot {
   position: absolute;
   inset: 3px;
   border-radius: 50%;
   background: #fff;
   transition: transform 0.2s ease;
 }
-.cursor__ring {
+.cursor-glide .cursor__ring {
   position: absolute;
   inset: -10px;
   border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
   transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s;
 }
-.cursor.is-hover .cursor__ring {
+.cursor-glide.is-hover .cursor__ring {
   transform: scale(2.1);
   opacity: 0.9;
 }
-.cursor.is-hover .cursor__dot {
+.cursor-glide.is-hover .cursor__dot {
   transform: scale(0.35);
 }
-.cursor.is-down .cursor__ring {
+.cursor-glide.is-down .cursor__ring {
   transform: scale(0.85);
 }
+
+@media screen and (max-width: 900px) {
+  .cursor { display: none; }
+}
+
+/* ============================================================
+   TIDEWAVE — removable dark cursor-reactive waves (hero clouds)
+   Delete this whole block when removing the feature.
+   ============================================================ */
+.desk-top {
+  position: relative;
+  overflow: hidden;
+  background: var(--paper);
+}
+.tidewave {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  color: #121212;
+}
+.tidewave[hidden] { display: none !important; }
+.tidewave__wash {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(18, 18, 18, 0.92) 0%, rgba(18, 18, 18, 0.55) 42%, rgba(18, 18, 18, 0.12) 78%, transparent 100%);
+}
+.tidewave__layer {
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  top: 0;
+  width: 116%;
+  height: 55%;
+  opacity: 0.55;
+  will-change: transform;
+}
+.tidewave__layer:nth-child(2) { opacity: 0.35; top: 10%; color: #1c1c1c; }
+.tidewave__layer:nth-child(3) { opacity: 0.5; top: 4%; color: #0a0a0a; }
+.tidewave__layer:nth-child(4) { opacity: 0.7; top: 0; color: #050505; }
+
+body.has-tidewave .desk-top .topbar,
+body.has-tidewave .desk-top .hero {
+  position: relative;
+  z-index: 1;
+}
+body.has-tidewave .desk-top .topbar {
+  color: #eceae4;
+  border-bottom-color: rgba(236, 234, 228, 0.14);
+  max-width: 1120px;
+  margin: 0 auto;
+}
+body.has-tidewave .brand,
+body.has-tidewave .brand__name { color: #eceae4; }
+body.has-tidewave .brand__la,
+body.has-tidewave .meta-line { color: rgba(236, 234, 228, 0.55); }
+body.has-tidewave .brand__dot { color: #9eb6ff; }
+body.has-tidewave .hero__index,
+body.has-tidewave .hero__scroll-hint { color: rgba(236, 234, 228, 0.5); }
+body.has-tidewave .hero__brand { color: #eceae4; }
+body.has-tidewave .hero__brand span { color: #9eb6ff; }
+body.has-tidewave .hero__title { color: #eceae4; }
+body.has-tidewave .hero__sub { color: rgba(236, 234, 228, 0.72); }
+body.has-tidewave .hero__sub b { color: #fff; }
+body.has-tidewave .hero {
+  border-bottom: none;
+  padding-top: 48px;
+  padding-bottom: 72px;
+}
+body.has-tidewave .hero__marquee { opacity: 0.08; color: #fff; }
+body.has-tidewave .btn--primary {
+  background: #eceae4;
+  color: #121212;
+  border-color: #eceae4;
+}
+body.has-tidewave .btn--primary:hover {
+  background: #fff;
+  border-color: #fff;
+  color: #121212;
+}
+/* ========== end TIDEWAVE ========== */
 
 /* ---------- Top bar ---------- */
 .topbar {
@@ -731,7 +858,8 @@ input[type="range"]::-moz-range-thumb {
   .ctl-row { grid-template-columns: 1fr; }
   .topbar__meta .meta-line--dim { display: none; }
   body { cursor: auto; }
-  .cursor { display: none !important; }
+  .cursor,
+  .cursor-glide { display: none !important; }
   .btn, .genre, .room-btn, .brand, .hero__brand, .dropzone, .select, input[type="range"] {
     cursor: pointer;
   }

@@ -14,30 +14,69 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-BxoWt4Pp.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CCIwZcbF.css">
+    <script type="module" crossorigin src="./assets/index-Dwy5JQBS.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DUUi4_PV.css">
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
-    <div class="cursor" id="cursor" aria-hidden="true">
+
+    <!-- gooey filter for tile cursor blobs (pxpush) -->
+    <svg class="cursor-gooey-defs" aria-hidden="true" width="0" height="0">
+      <defs>
+        <filter id="gooey">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+          <feColorMatrix
+            in="blur"
+            mode="matrix"
+            values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -8"
+            result="goo"
+          />
+          <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+        </filter>
+      </defs>
+    </svg>
+
+    <!-- Tile cursor field (pxpush-style drag tiles) -->
+    <div class="cursor" id="cursor" data-ttl="0.22" style="--columns: 18" aria-hidden="true">
+      <div class="cursor__inner" id="cursorInner"></div>
+    </div>
+    <div class="cursor-glide" id="cursorGlide" aria-hidden="true">
       <div class="cursor__ring"></div>
       <div class="cursor__dot"></div>
     </div>
 
-    <header class="topbar">
-      <button type="button" class="brand hover_effect" id="brandHome" title="Start over — upload a new track" aria-label="MIXMASTER LA — reset and upload a new track">
-        <span class="brand__dot">●</span>
-        <span class="brand__name">MIXMASTER</span>
-        <span class="brand__la">LA</span>
-      </button>
-      <nav class="topbar__meta">
-        <span class="meta-line">Nº · Studio online</span>
-        <span class="meta-line meta-line--dim">100% in-browser</span>
-      </nav>
-    </header>
+    <!--
+      TIDEWAVE — dark cursor-reactive waves in the hero (pxpush cloud-style).
+      Easy removal: set ENABLE_TIDEWAVE=false in src/ui/tidewave.js,
+      or delete the tidewave node + tidewave.js import + /* TIDEWAVE */ CSS.
+    -->
+    <div class="desk-top">
+      <div class="tidewave" id="tidewave" aria-hidden="true">
+        <div class="tidewave__wash"></div>
+        <svg class="tidewave__layer" data-tide-depth="0.35" viewBox="0 0 1440 320" preserveAspectRatio="none">
+          <path fill="currentColor" d="M0,192L48,176C96,160,192,128,288,133.3C384,139,480,181,576,186.7C672,192,768,160,864,144C960,128,1056,128,1152,149.3C1248,171,1344,213,1392,234.7L1440,256L1440,0L1392,0C1344,0,1248,0,1152,0C1056,0,960,0,864,0C768,0,672,0,576,0C480,0,384,0,288,0C192,0,96,0,48,0L0,0Z"></path>
+        </svg>
+        <svg class="tidewave__layer" data-tide-depth="0.7" viewBox="0 0 1440 320" preserveAspectRatio="none">
+          <path fill="currentColor" d="M0,96L60,112C120,128,240,160,360,165.3C480,171,600,149,720,128C840,107,960,85,1080,96C1200,107,1320,149,1380,170.7L1440,192L1440,0L1380,0C1320,0,1200,0,1080,0C960,0,840,0,720,0C600,0,480,0,360,0C240,0,120,0,60,0L0,0Z"></path>
+        </svg>
+        <svg class="tidewave__layer" data-tide-depth="1.15" viewBox="0 0 1440 320" preserveAspectRatio="none">
+          <path fill="currentColor" d="M0,64L48,80C96,96,192,128,288,128C384,128,480,96,576,90.7C672,85,768,107,864,128C960,149,1056,171,1152,165.3C1248,160,1344,128,1392,112L1440,96L1440,0L1392,0C1344,0,1248,0,1152,0C1056,0,960,0,864,0C768,0,672,0,576,0C480,0,384,0,288,0C192,0,96,0,48,0L0,0Z"></path>
+        </svg>
+      </div>
 
-    <main class="stage">
-      <section class="hero">
+      <header class="topbar">
+        <button type="button" class="brand hover_effect" id="brandHome" title="Start over — upload a new track" aria-label="MIXMASTER LA — reset and upload a new track">
+          <span class="brand__dot">●</span>
+          <span class="brand__name">MIXMASTER</span>
+          <span class="brand__la">LA</span>
+        </button>
+        <nav class="topbar__meta">
+          <span class="meta-line">Nº · Studio online</span>
+          <span class="meta-line meta-line--dim">100% in-browser</span>
+        </nav>
+      </header>
+
+      <section class="hero stage">
         <p class="hero__index reveal">Nº001 / Desk</p>
         <div class="hero__marquee" aria-hidden="true">
           <div class="hero__marquee-track">
@@ -61,7 +100,9 @@
           <span class="hero__scroll-hint">Scroll to open the desk</span>
         </div>
       </section>
+    </div><!-- /.desk-top -->
 
+    <main class="stage">
       <!-- STEP 1: UPLOAD -->
       <section class="panel reveal" id="dropCard">
         <div class="panel__head">
