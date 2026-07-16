@@ -423,11 +423,12 @@ function renderNotes(result) {
 
   const logHtml = (engineerLog || [])
     .map((l) => {
-      if (l.type === 'role') return `<li><b>${l.text}</b></li>`;
-      if (l.type === 'room') return `<li>🏠 ${l.text}</li>`;
-      if (l.type === 'finding') return `<li style="opacity:.95">🔍 ${l.text}</li>`;
-      if (l.type === 'decision') return `<li>→ ${l.text}</li>`;
-      return `<li>${l.text}</li>`;
+      if (l.type === 'role') return `<li class="elog elog--role"><b>${l.text}</b></li>`;
+      if (l.type === 'room') return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
+      if (l.type === 'finding') return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
+      if (l.type === 'decision') return `<li class="elog"><span class="elog__mark" aria-hidden="true">→</span> ${l.text}</li>`;
+      if (l.type === 'priorities') return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
+      return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
     }).join('');
 
   const moves = (corrective || []).length

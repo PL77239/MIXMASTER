@@ -125,11 +125,7 @@ export function planSession(diag, settings) {
   });
 
   for (const f of diag.findings.slice(0, 7)) {
-    if (f.action === 'note_instruments') {
-      log.push({ type: 'finding', text: `🎛 ${f.note}`, severity: f.severity });
-    } else {
-      log.push({ type: 'finding', text: f.note, severity: f.severity });
-    }
+    log.push({ type: 'finding', text: f.note, severity: f.severity });
   }
 
   // ── Analyze references FIRST (Matchering-style) ───────────────────
