@@ -14,6 +14,12 @@ import {
   renderGraph, chain, peaking, lowShelf, highShelf, highpass, lowpass,
   gainNode, saturationCurve, compressor, makeBuffer, getChannelArrays, dbToLin,
 } from './dsp.js';
+import {
+  multibandCompress,
+  parallelCompress,
+  harmonicExciter,
+  stereoImage,
+} from './stages.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -73,72 +79,6 @@ async function kickBassSeparate(inputBuffer, spec) {
     for (let i = 0; i < n; i++) out[c][i] = hi[i] + lo[i] * gainEnv[i];
   }
   return makeBuffer(out, fs);
-}
-
-async function midSideShape(inputBuffer, plan) {
-  const fs = inputBuffer.sampleRate;
-  if (inputBuffer.numberOfChannels < 2) {
-    return renderGraph(inputBuffer, (ctx, source) => {
-      const nodes = [source];
-      if (plan.eq.some((e) => e.label === 'Lead presence')) {
-        const p = plan.eq.find((e) => e.label === 'Lead presence');
-        nodes.push(peaking(ctx, p.freq, p.gain * 0.3, 1));
-      }
-      return chain(nodes);
-    });
-  }
-
-  const L = inputBuffer.getChannelData(0);
-  const R = inputBuffer.getChannelData(1);
-  const n = L.length;
-  const M = new Float32Array(n);
-  const S = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    M[i] = 0.5 * (L[i] + R[i]);
-    S[i] = 0.5 * (L[i] - R[i]);
-  }
-
-  let midE = 0, sideE = 0;
-  for (let i = 0; i < n; i += 2) {
-    midE += M[i] * M[i];
-    sideE += S[i] * S[i];
-  }
-  const curW = midE + sideE > 0 ? sideE / (midE + sideE) : 0.05;
-  const tgt = plan.widthTarget;
-  const curRatio = curW > 1e-6 ? curW / (1 - curW) : 0.03;
-  const tgtRatio = Math.max(0.02, tgt / Math.max(1 - tgt, 0.02));
-  let sideScale = tgtRatio / Math.max(curRatio, 1e-4);
-
-  // Preserve / widen: never collapse the image (EDM “more mono” bug)
-  if (plan.preserveWidth || plan.widthMode === 'preserve' || plan.widthMode === 'widen') {
-    sideScale = clamp(sideScale, 0.95, 1.45);
-  } else {
-    sideScale = clamp(sideScale, 0.75, 1.35);
-  }
-
-  // Mono-safe low end only — highpass sides at monoBassHz (true sub), not mid-bass
-  const monoHz = plan.monoBassHz || 100;
-
-  const midOut = await renderGraph(makeBuffer([M], fs), (ctx, source) =>
-    chain([source, peaking(ctx, 1000, 0.08, 0.9)]));
-
-  const sideNodes = (ctx, source) => {
-    const nodes = [source, highpass(ctx, monoHz), highpass(ctx, monoHz)];
-    if (plan.sideAir) nodes.push(highShelf(ctx, plan.sideAir.freq, plan.sideAir.gain));
-    return chain(nodes);
-  };
-  const sideOut = await renderGraph(makeBuffer([S], fs), sideNodes);
-
-  const Mp = midOut.getChannelData(0);
-  const Sp = sideOut.getChannelData(0);
-  const outL = new Float32Array(n);
-  const outR = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const sw = Sp[i] * sideScale;
-    outL[i] = Mp[i] + sw;
-    outR[i] = Mp[i] - sw;
-  }
-  return makeBuffer([outL, outR], fs);
 }
 
 /**
@@ -242,20 +182,41 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
     await yieldFrame();
   }
 
-  report(0.52, plan.preserveWidth
-    ? 'Mid/Side — mono-safe sub only, preserve stereo width…'
-    : 'Mid/Side — mono bass, width polish…');
-  buf = await midSideShape(buf, plan);
+  report(0.5, plan.preserveWidth
+    ? 'Stereo image — mono-safe sub, preserve width…'
+    : 'Stereo image — mono bass, width polish…');
+  buf = await stereoImage(buf, plan);
   await yieldFrame();
 
-  report(0.64, plan.protectDynamics
+  if (plan.multiband?.enabled) {
+    report(0.56, 'Multiband compress — low / mid / high control…');
+    buf = await multibandCompress(buf, plan.multiband);
+    await yieldFrame();
+  } else {
+    report(0.56, 'Multiband — skipped (protect / open desk)…');
+    await yieldFrame();
+  }
+
+  if (plan.parallel?.mix > 0.02) {
+    report(0.62, 'Parallel (NY) compression — density under the dry bus…');
+    buf = await parallelCompress(buf, plan.parallel);
+    await yieldFrame();
+  }
+
+  report(0.66, plan.protectDynamics
     ? 'Dynamics protect — skipping heavy glue…'
     : 'Light bus glue (tap, don’t slam)…');
   buf = await gluePass(buf, plan);
   await yieldFrame();
 
+  if (plan.exciter?.amount > 0.02) {
+    report(0.7, 'Harmonic exciter — high-band air / edge…');
+    buf = await harmonicExciter(buf, plan.exciter);
+    await yieldFrame();
+  }
+
   // Residual FR refine only (polish) — capped soft
-  report(0.74, plan.refProfile
+  report(0.76, plan.refProfile
     ? 'Closing toward analyzed reference spectrum…'
     : 'Light spectral polish (not a remould)…');
   const midRegions = measureRegions(getChannelArrays(buf), buf.sampleRate);

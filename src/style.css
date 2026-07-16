@@ -225,6 +225,11 @@ body:has(.logo3d.is-ready) .brand {
   overflow: hidden;
   background: var(--paper);
   min-height: 100svh;
+  /* room for fixed topbar */
+  padding-top: 64px;
+}
+.stack-panel.band {
+  padding-top: calc(4vw + 64px);
 }
 .tidewave {
   position: absolute;
@@ -271,21 +276,10 @@ body:has(.logo3d.is-ready) .brand {
 .tidewave__layer--e { opacity: 0.98; top: 0; color: #000; }
 .tidewave__layer--f { opacity: 1; top: -4%; color: #000; height: 50%; }
 
-body.has-tidewave .desk-top .topbar,
 body.has-tidewave .desk-top .hero {
   position: relative;
   z-index: 1;
 }
-body.has-tidewave .desk-top .topbar {
-  color: #eceae4;
-  border-bottom-color: rgba(236, 234, 228, 0.14);
-  max-width: 1120px;
-  margin: 0 auto;
-}
-body.has-tidewave .brand,
-body.has-tidewave .brand__name { color: #eceae4; }
-body.has-tidewave .meta-line { color: rgba(236, 234, 228, 0.55); }
-body.has-tidewave .brand__dot { color: #9eb6ff; }
 body.has-tidewave .hero__index,
 body.has-tidewave .hero__scroll-hint { color: rgba(236, 234, 228, 0.5); }
 body.has-tidewave .hero__brand { color: #eceae4; }
@@ -311,6 +305,46 @@ body.has-tidewave .btn--primary:hover {
 }
 /* ========== end TIDEWAVE ========== */
 
+/* ---------- Scroll stack (static viewport, shove-up panels) ---------- */
+.scroll-stack {
+  position: relative;
+  width: 100%;
+}
+.scroll-stack__spacer {
+  width: 1px;
+  pointer-events: none;
+}
+.scroll-stack__stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  width: 100%;
+  overflow: hidden;
+  z-index: 1;
+}
+.stack-panel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.stack-panel.desk-top {
+  min-height: 100%;
+}
+html.has-scroll-stack {
+  scroll-behavior: auto; /* stack drives motion; avoid fighting smooth scroll */
+}
+@media (prefers-reduced-motion: reduce) {
+  html.has-scroll-stack { scroll-behavior: auto; }
+  .stack-panel { will-change: auto; }
+}
+
 /* ---------- Top bar ---------- */
 .topbar {
   display: flex;
@@ -321,6 +355,27 @@ body.has-tidewave .btn--primary:hover {
   margin: 0 auto;
   border-bottom: 1px solid var(--line);
 }
+.topbar--fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 28;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding-left: clamp(18px, 4vw, 48px);
+  padding-right: clamp(18px, 4vw, 48px);
+  background: rgba(8, 8, 8, 0.55);
+  border-bottom-color: rgba(236, 234, 228, 0.14);
+  color: #eceae4;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.topbar--fixed .brand,
+.topbar--fixed .brand__name { color: #eceae4; }
+.topbar--fixed .brand__dot { color: #9eb6ff; }
+.topbar--fixed .meta-line { color: rgba(236, 234, 228, 0.55); }
 .brand {
   display: inline-flex;
   align-items: baseline;
@@ -1163,43 +1218,21 @@ input[type="range"]::-moz-range-thumb {
 
 .hidden { display: none !important; }
 
-/* Reveal on scroll */
-.reveal {
+/* Panel content expands when the stack brings a section into place */
+.stack-panel [data-expand] {
   opacity: 0;
-  transform: translateY(18px);
-  transition: opacity 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.reveal.is-in {
-  opacity: 1;
-  transform: none;
-}
-
-/* Nº002+ bands expand as they enter */
-.band.reveal {
-  opacity: 0;
-  transform: translateY(56px) scale(0.94);
-  clip-path: inset(10% 3% 10% 3%);
-  transition:
-    opacity 0.85s cubic-bezier(0.2, 0.8, 0.2, 1),
-    transform 0.95s cubic-bezier(0.16, 1, 0.3, 1),
-    clip-path 0.95s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.band.reveal.is-in {
-  opacity: 1;
-  transform: none;
-  clip-path: inset(0 0 0 0);
-}
-
-.band [data-expand] {
-  opacity: 0;
-  transform: translateY(28px) scale(0.98);
+  transform: translateY(22px);
   transition:
     opacity 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) var(--expand-delay, 0ms),
     transform 0.75s cubic-bezier(0.16, 1, 0.3, 1) var(--expand-delay, 0ms);
 }
-.band [data-expand].is-in {
+.stack-panel [data-expand].is-in {
   opacity: 1;
   transform: none;
+}
+.stack-panel.footnote-band {
+  display: flex;
+  align-items: center;
 }
 
 @media (max-width: 720px) {
@@ -1216,12 +1249,9 @@ input[type="range"]::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .hero__marquee-track,
   .band__marquee-track { animation: none; }
-  .reveal,
-  .band.reveal,
-  .band [data-expand] {
+  .stack-panel [data-expand] {
     opacity: 1;
     transform: none;
-    clip-path: none;
     transition: none;
   }
   .cursor__ring, .cursor__dot { transition: none; }

@@ -8,6 +8,9 @@
       content="MIXA — a client-side AI mix & mastering studio. Upload WAV, FLAC or MP3 and get a genre-aware, -14 LUFS master, processed entirely in your browser."
     />
     <title>MIXA · AI Mix &amp; Master Studio</title>
+    <!-- Served from /public/janko.ico (copied as-is; do not use ./ or Vite hashes it) -->
+    <link rel="icon" href="/janko.ico" type="image/x-icon" />
+    <link rel="shortcut icon" href="/janko.ico" type="image/x-icon" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -49,7 +52,33 @@
       Easy removal: set ENABLE_TIDEWAVE=false in src/ui/tidewave.js,
       or delete the tidewave node + tidewave.js import + /* TIDEWAVE */ CSS.
     -->
-    <div class="desk-top">
+    <!-- Fixed brand chrome — MIXA always returns home -->
+    <header class="topbar topbar--fixed">
+      <button type="button" class="brand hover_effect" id="brandHome" title="MIXA — back to home" aria-label="MIXA — back to home">
+        <span class="brand__dot">●</span>
+        <span class="brand__name">MIXA</span>
+      </button>
+      <nav class="topbar__meta">
+        <span class="meta-line">Nº · Studio online</span>
+        <span class="meta-line meta-line--dim">100% in-browser</span>
+      </nav>
+    </header>
+
+    <!-- 3D rotational logo (pxpush-style extruded metal mark) -->
+    <div class="logo3d logo3d--corner" id="logo3d" title="MIXA — back to home" role="button" tabindex="0" aria-label="MIXA — back to home">
+      <div class="logo3d__canvas" id="logo3dCanvas"></div>
+      <div class="logo3d__fallback" aria-hidden="true">●</div>
+    </div>
+
+    <!--
+      Scroll stack: almost-static viewport. Scrolling shoves the previous
+      panel up and brings the next section into place.
+    -->
+    <div class="scroll-stack" id="scrollStack">
+      <div class="scroll-stack__spacer" id="scrollSpacer" aria-hidden="true"></div>
+      <div class="scroll-stack__stage" id="scrollStage">
+
+    <div class="stack-panel desk-top" data-stack-panel id="homePanel">
       <div class="tidewave" id="tidewave" aria-hidden="true">
         <div class="tidewave__wash"></div>
         <svg class="tidewave__layer tidewave__layer--a" data-tide-depth="0.25" viewBox="0 0 1440 320" preserveAspectRatio="none">
@@ -72,52 +101,34 @@
         </svg>
       </div>
 
-      <header class="topbar">
-        <button type="button" class="brand hover_effect" id="brandHome" title="Start over — upload a new track" aria-label="MIXA — reset and upload a new track">
-          <span class="brand__dot">●</span>
-          <span class="brand__name">MIXA</span>
-        </button>
-        <nav class="topbar__meta">
-          <span class="meta-line">Nº · Studio online</span>
-          <span class="meta-line meta-line--dim">100% in-browser</span>
-        </nav>
-      </header>
-
-      <!-- 3D rotational logo (pxpush-style extruded metal mark) -->
-      <div class="logo3d logo3d--corner" id="logo3d" title="MIXA — reset and upload a new track" role="button" tabindex="0" aria-label="MIXA — reset and upload a new track">
-        <div class="logo3d__canvas" id="logo3dCanvas"></div>
-        <div class="logo3d__fallback" aria-hidden="true">●</div>
-      </div>
-
       <section class="hero stage">
-        <p class="hero__index reveal">Nº001 / Desk</p>
+        <p class="hero__index" data-expand>Nº001 / Desk</p>
         <div class="hero__marquee" aria-hidden="true">
           <div class="hero__marquee-track">
             <span>● MIXA</span><span>● MIXA</span><span>● MIXA</span>
             <span>● MIXA</span><span>● MIXA</span><span>● MIXA</span>
           </div>
         </div>
-        <button type="button" class="hero__brand hover_effect reveal" id="heroHome" title="Start over — upload a new track" aria-label="MIXA — reset and upload a new track">
+        <button type="button" class="hero__brand hover_effect" id="heroHome" data-expand title="MIXA — back to home" aria-label="MIXA — back to home">
           MIXA
         </button>
-        <h1 class="hero__title reveal">
+        <h1 class="hero__title" data-expand>
           On–demand mix &amp; master<br />for the track in front of you.
         </h1>
-        <p class="hero__sub reveal">
+        <p class="hero__sub" data-expand>
           Upload <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. The desk listens like a genre engineer —
           instruments, masking, peaks, transients — then polishes toward streaming delivery
           near <b>&minus;14&nbsp;LUFS</b>. Optional references. Studio or car translation.
         </p>
-        <div class="hero__cta reveal">
+        <div class="hero__cta" data-expand>
           <a class="btn btn--primary hover_effect" href="#dropCard">Load your record <span aria-hidden="true">↗</span></a>
-          <span class="hero__scroll-hint">Scroll to open the desk</span>
+          <span class="hero__scroll-hint">Scroll — next section shoves this up</span>
         </div>
       </section>
-    </div><!-- /.desk-top -->
+    </div><!-- /#homePanel -->
 
-    <main class="desk-body">
       <!-- STEP 1: UPLOAD — wash band -->
-      <section class="band band--wash reveal" id="dropCard">
+      <section class="band band--wash stack-panel" data-stack-panel id="dropCard">
         <div class="band__marquee" aria-hidden="true" data-expand>
           <div class="band__marquee-track">
             <span>● LOAD</span><span>● LOAD</span><span>● LOAD</span>
@@ -158,7 +169,7 @@
       </section>
 
       <!-- STEP 2: DIRECTION — navy band -->
-      <section class="band band--navy reveal" id="controlsCard">
+      <section class="band band--navy stack-panel" data-stack-panel id="controlsCard">
         <div class="band__marquee" aria-hidden="true" data-expand>
           <div class="band__marquee-track">
             <span>● DIRECTION</span><span>● DIRECTION</span><span>● DIRECTION</span>
@@ -256,7 +267,7 @@
       </section>
 
       <!-- PROGRESS — ink band -->
-      <section class="band band--ink progress-card hidden reveal cursor_disabled" id="progressCard">
+      <section class="band band--ink progress-card stack-panel hidden cursor_disabled" data-stack-panel id="progressCard">
         <div class="band__frame">
           <div class="separator" data-expand>
             <span class="separator__index">Nº · Live</span>
@@ -276,7 +287,7 @@
       </section>
 
       <!-- STEP 3: RESULT — paper band with accent -->
-      <section class="band band--paper result hidden reveal" id="resultCard">
+      <section class="band band--paper result stack-panel hidden" data-stack-panel id="resultCard">
         <div class="band__marquee" aria-hidden="true" data-expand>
           <div class="band__marquee-track">
             <span>● MASTER</span><span>● MASTER</span><span>● MASTER</span>
@@ -331,7 +342,7 @@
         </div>
       </section>
 
-      <div class="band band--ink footnote-band">
+      <div class="band band--ink footnote-band stack-panel" data-stack-panel id="footnotePanel">
         <div class="band__frame">
           <footer class="footnote">
             <p>
@@ -341,7 +352,9 @@
           </footer>
         </div>
       </div>
-    </main>
+
+      </div><!-- /#scrollStage -->
+    </div><!-- /#scrollStack -->
 
     <script type="module" src="/src/main.js"></script>
   </body>

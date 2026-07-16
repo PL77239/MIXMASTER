@@ -1,9 +1,11 @@
 /**
  * Engineer session planner — diagnose → decide → polish.
  *
- * Principles (iZotope mix/master guide + Aurora “BEAST” guide):
+ * Principles (iZotope Mixing Guide, Mixing/Mastering on the Box,
+ * Digital Natural Sound tips, Maztr genre mastering, Aurora “BEAST”):
  * - Mastering = small polish, not a remould
  * - Tap compressors — don’t slam (especially Medium)
+ * - Multiband + parallel (NY) for density; exciters for air — not remould EQ
  * - Treat peaks & limits, not only EQ
  * - Kick/bass get space; instruments inform presence decisions
  * - References: analyze first, then pull the upload toward them
@@ -33,6 +35,9 @@ function intensityScale(profile, protectDynamics) {
       satMul: 0.12,
       duckMul: 0.45,
       eqMul: 0.55,
+      mbMul: 0.1,
+      parallelMul: 0.08,
+      exciterMul: 0.08,
       polishCap: 1.2,
       refineMul: 0.12,
       ceilingDb: -1.2,
@@ -46,6 +51,9 @@ function intensityScale(profile, protectDynamics) {
       satMul: 0.15,
       duckMul: 0.55,
       eqMul: 0.6,
+      mbMul: 0.2,
+      parallelMul: 0.15,
+      exciterMul: 0.12,
       polishCap: 1.3,
       refineMul: 0.15,
       ceilingDb: -1.2,
@@ -59,6 +67,9 @@ function intensityScale(profile, protectDynamics) {
       satMul: 0.35,
       duckMul: 0.9,
       eqMul: 0.85,
+      mbMul: 0.75,
+      parallelMul: 0.7,
+      exciterMul: 0.55,
       polishCap: 2.2,
       refineMul: 0.28,
       ceilingDb: -0.9,
@@ -72,6 +83,9 @@ function intensityScale(profile, protectDynamics) {
     satMul: 0.18,
     duckMul: 0.7,
     eqMul: 0.7,
+    mbMul: 0.4,
+    parallelMul: 0.35,
+    exciterMul: 0.28,
     polishCap: 1.6,
     refineMul: 0.18,
     ceilingDb: -1.0,
@@ -515,12 +529,87 @@ export function planSession(diag, settings) {
     ratio: 1 + (t.glue.ratio - 1) * scale.glueMul,
   };
   let sat = clamp(t.sat * scale.satMul, 0, 0.12);
+
+  // Multiband (Maztr rock/EDM, Digital Natural Sound) — gentle per-band control
+  let multiband = null;
+  if (scale.mbMul >= 0.18 && !protect) {
+    const lowRatio = 1 + 0.55 * scale.mbMul * (lowEndProtected ? 0.55 : 1);
+    const midRatio = 1 + 0.85 * scale.mbMul;
+    const highRatio = 1 + 0.65 * scale.mbMul;
+    multiband = {
+      enabled: true,
+      lowHz: lowEndProtected ? 160 : 190,
+      highHz: 4200,
+      low: {
+        threshold: -24,
+        ratio: clamp(lowRatio, 1.1, 1.9),
+        attack: 0.025,
+        release: 0.22,
+        makeupDb: 0.35 * scale.mbMul,
+        knee: 12,
+      },
+      mid: {
+        threshold: -20,
+        ratio: clamp(midRatio, 1.15, 2.2),
+        attack: 0.018,
+        release: 0.18,
+        makeupDb: 0.45 * scale.mbMul,
+        knee: 10,
+      },
+      high: {
+        threshold: -18,
+        ratio: clamp(highRatio, 1.1, 1.85),
+        attack: 0.008,
+        release: 0.14,
+        makeupDb: 0.3 * scale.mbMul,
+        knee: 8,
+      },
+    };
+    log.push({
+      type: 'decision',
+      text: `Decision: multiband compress — L ${multiband.low.ratio.toFixed(2)}:1 · M ${multiband.mid.ratio.toFixed(2)}:1 · H ${multiband.high.ratio.toFixed(2)}:1 (tap, don’t slam).`,
+    });
+  }
+
+  // Parallel NY compression (iZotope / Mixing on the Box / Maztr hip-hop & jazz)
+  let parallel = null;
+  const parallelMix = clamp(0.22 * scale.parallelMul, 0, 0.42);
+  if (parallelMix >= 0.04 && !protect) {
+    parallel = {
+      mix: parallelMix,
+      threshold: -30,
+      ratio: 3.5 + scale.parallelMul * 1.5,
+      attack: 0.003,
+      release: 0.15,
+      makeupDb: 3.5,
+    };
+    log.push({
+      type: 'decision',
+      text: `Decision: parallel (NY) compress — ${(parallel.mix * 100).toFixed(0)}% wet under dry bus for density.`,
+    });
+  }
+
+  // Harmonic exciter (Maztr saturation/distortion · iZotope excitement)
+  let exciter = null;
+  const excAmount = clamp(0.16 * scale.exciterMul, 0, 0.28);
+  if (excAmount >= 0.03 && !protect) {
+    exciter = {
+      amount: excAmount,
+      freq: settings.genre === 'acoustic' || settings.genre === 'classical' ? 4500 : 3200,
+      mix: clamp(0.14 * scale.exciterMul, 0.05, 0.22),
+    };
+    log.push({
+      type: 'decision',
+      text: `Decision: harmonic exciter — high-band blend ${(exciter.mix * 100).toFixed(0)}% @ ${exciter.freq} Hz.`,
+    });
+  }
+
   if (protect) {
     glue = { ...glue, ratio: Math.min(glue.ratio, 1.15), threshold: glue.threshold - 3 };
     sat = Math.min(sat, 0.03);
     log.push({
       type: 'decision',
-      text: 'Decision: already over-compressed — skip heavy glue/sat (tap, don’t slam).',
+      text: 'Decision: already over-compressed — skip heavy glue/sat/multiband (tap, don’t slam).',
     });
   } else {
     log.push({
@@ -591,6 +680,9 @@ export function planSession(diag, settings) {
     sideAir,
     glue,
     sat,
+    multiband,
+    parallel,
+    exciter,
     protectDynamics: protect,
     protectLowEnd: lowEndProtected,
     spectrumTarget: refProfile?.regions || pb.spectrum,

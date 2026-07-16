@@ -21,4 +21,11 @@ if (!existsSync(distIndex) || !existsSync(assetsSrc)) {
 rmSync(assetsDst, { recursive: true, force: true });
 cpSync(assetsSrc, assetsDst, { recursive: true });
 writeFileSync(rootIndex, readFileSync(distIndex));
-console.log('Published dist → repo root (index.html + assets/) for GitHub Pages');
+
+// Root static files from Vite public/ (favicon, etc.)
+for (const name of ['janko.ico']) {
+  const from = resolve(dist, name);
+  if (existsSync(from)) cpSync(from, resolve(root, name));
+}
+
+console.log('Published dist → repo root (index.html + assets/ + favicon) for GitHub Pages');

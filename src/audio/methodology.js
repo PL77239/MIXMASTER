@@ -3,6 +3,10 @@
  * - MasteringBOX: frequency analysis, headroom, stereo balance, transients,
  *   ear fatigue, Atmos notes, phase/polarity, frequency masking, transient shapers
  * - Production Expert / Mastering The Mix / Pirate.com: genre-tailored mastering
+ * - Maztr — mastering different genres (multiband, parallel, saturation, imaging)
+ * - Mixing & Mastering on the Box — bus / NY parallel / exciters
+ * - Digital Natural Sound — multiband tips, gentle master-bus moves
+ * - iZotope Mixing Guide — parallel compression, harmonic excitement, imaging
  *
  * Used as decision rules in diagnose → plan → polish (not blind remoulding).
  */
