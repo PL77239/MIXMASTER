@@ -53,7 +53,9 @@ export const PLAYBOOKS = {
       airSide: { f: 10000, g: 0.8 },
       glue: { threshold: -20, ratio: 1.6, attack: 0.035, release: 0.22 },
       sat: 0.12,
-      monoBassHz: 120,
+      monoBassHz: 110,
+      preserveWidth: true,
+      protectLowEnd: true,
     },
   },
 
@@ -88,32 +90,34 @@ export const PLAYBOOKS = {
   edm: {
     role: 'EDM / House mix & mastering engineer',
     priorities: [
-      'Kick definition through the sub',
-      'Bass that pumps without masking the kick',
-      'Wide highs / FX; mono-safe low end',
+      'Maximize low-end impact (tight, not thin)',
+      'Kick transients cut through the drop',
+      'Wide highs / FX; mono-safe sub only',
       'Club translation + clean limiting',
     ],
-    spectrum: spec({ sub: 0.1, bass: 0.3, lowMid: 0.15, mid: 0.22, high: 0.15, air: 0.08 }),
+    // Production Expert / MtM: EDM needs weight + punch, not scooped bass
+    spectrum: spec({ sub: 0.12, bass: 0.34, lowMid: 0.13, mid: 0.2, high: 0.14, air: 0.07 }),
     checks: {
-      maxSub: 0.16, minBass: 0.24, maxLowMid: 0.2, minPresence: 0.07,
-      minCrest: 7.5, targetWidth: 0.2, vocalPresenceHz: 3000,
+      maxSub: 0.22, minBass: 0.28, maxLowMid: 0.22, minPresence: 0.06,
+      minCrest: 7.0, targetWidth: 0.24, vocalPresenceHz: 3000,
     },
     techniques: {
-      rumbleHp: 30,
-      // Tight lows, not a blanket low-shelf boost (that caused mud before)
-      lowShelf: { f: 70, g: 0.3 },
-      mudCut: { f: 320, g: -2.2, q: 0.85 },
-      boxCut: { f: 450, g: -1.2, q: 1.0 },
-      // Classic house sidechain behaviour on the low band
-      kickBassSep: { enabled: true, bandHz: 85, duckDb: 3.5, attackMs: 5, releaseMs: 90 },
-      highShelf: { f: 10000, g: 1.2 },
-      airSide: { f: 11000, g: 1.5 },
-      vocalPresence: { f: 3000, g: 0.6, q: 1.0 },
-      deEss: { f: 8000, g: -0.8 },
-      // Soft bus — Medium intensity must not crush EDM
-      glue: { threshold: -22, ratio: 1.35, attack: 0.035, release: 0.18 },
-      sat: 0.06,
-      monoBassHz: 140,
+      rumbleHp: 28,
+      lowShelf: { f: 65, g: 1.1 },
+      mudCut: { f: 350, g: -1.0, q: 0.9 },
+      boxCut: { f: 480, g: -0.7, q: 1.0 },
+      kickBassSep: { enabled: true, bandHz: 80, duckDb: 2.4, attackMs: 5, releaseMs: 85 },
+      highShelf: { f: 10500, g: 0.9 },
+      airSide: { f: 11000, g: 1.4 },
+      vocalPresence: { f: 3000, g: 0.5, q: 1.0 },
+      deEss: { f: 8000, g: -0.6 },
+      glue: { threshold: -22, ratio: 1.3, attack: 0.04, release: 0.2 },
+      sat: 0.05,
+      // Mono only true sub — keep mid-bass stereo (Pirate / stereo balance)
+      monoBassHz: 90,
+      transientEnhance: { enabled: true, attackDb: 1.4, bandHz: 120 },
+      preserveWidth: true,
+      protectLowEnd: true,
     },
   },
 

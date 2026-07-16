@@ -14,8 +14,8 @@
       href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-C5FRCqw4.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BJM5AV4H.css">
+    <script type="module" crossorigin src="./assets/index-CWgnikHp.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Xklqnrni.css">
   </head>
   <body>
     <div class="sky"></div>
@@ -48,9 +48,9 @@
         </h1>
         <p class="hero__sub">
           Upload a <b>WAV</b>, <b>FLAC</b> or <b>MP3</b>. The desk detects instruments,
-          diagnoses mud / peaks / kick–bass fights, then <b>polishes</b> — not remoulds —
-          with genre playbooks. Drop similar tracks to match. Check translation in
-          <b>Studio</b> or <b>Car</b>. Delivery near <b>&minus;14&nbsp;LUFS</b> in your format.
+          diagnoses masking / peaks / transients, then <b>polishes</b> with genre playbooks
+          (EDM keeps low-end impact &amp; stereo width). Paste a YouTube / Spotify link or
+          upload lossless refs. Check <b>Studio</b> or <b>Car</b>. Near <b>&minus;14&nbsp;LUFS</b>.
         </p>
         <div class="hero__cta">
           <a class="btn btn--primary" href="#dropCard">Load your record</a>
@@ -123,10 +123,14 @@
             <label class="ctl__label" for="refInput">Match similar tracks <span class="ctl__hint">(optional)</span></label>
             <div class="ref-box">
               <input type="file" id="refInput" accept=".wav,.flac,.mp3,audio/wav,audio/flac,audio/mpeg" multiple hidden />
-              <button class="btn btn--ghost btn--sm" type="button" id="refBrowseBtn">Add reference(s)</button>
+              <button class="btn btn--ghost btn--sm" type="button" id="refBrowseBtn">Add file(s)</button>
               <button class="btn btn--ghost btn--sm hidden" type="button" id="refClearBtn">Clear</button>
             </div>
-            <p class="ctl__hint" id="refHint">Analyzed first, then your track is pulled toward them.</p>
+            <div class="ref-url-row">
+              <input class="select ref-url" type="url" id="refUrlInput" placeholder="Or paste YouTube / Spotify / direct WAV·FLAC link…" />
+              <button class="btn btn--ghost btn--sm" type="button" id="refUrlBtn">Add link</button>
+            </div>
+            <p class="ctl__hint" id="refHint">Analyzed first, then your track is pulled toward them. Prefer lossless WAV/FLAC.</p>
           </div>
         </div>
 

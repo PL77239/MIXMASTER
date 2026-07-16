@@ -17,6 +17,7 @@ import {
   averageReferences,
   referenceMatchEq,
 } from './reference.js';
+import { protectsLowEnd, wantsWideSides } from './methodology.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
@@ -146,28 +147,36 @@ export function planSession(diag, settings) {
   });
 
   const polish = (g) => capGain(g, scale.polishCap);
+  const lowEndProtected = Boolean(t.protectLowEnd) || protectsLowEnd(settings.genre);
+  const wideSides = Boolean(t.preserveWidth) || wantsWideSides(settings.genre);
 
-  // Conditional EQ from findings + playbook recipes (capped = polish)
+  log.push({
+    type: 'decision',
+    text: lowEndProtected
+      ? 'Guideline: maximize low-end impact — carve kick/bass space, don’t scoop the foundation (Production Expert / MtM EDM).'
+      : 'Guideline: subtractive EQ for clarity; balance bass/mids/treble (MasteringBOX frequency analysis).',
+  });
+
+  // Conditional EQ — mud only when actually muddy (not default polish on bass genres)
   const wantsMudCut =
-    actions.has('cut_mud') || (actions.has('polish') && !actions.has('fill_lowmid'));
+    actions.has('cut_mud') &&
+    (!lowEndProtected || sev('cut_mud') > 0.55);
   if (wantsMudCut && t.mudCut) {
-    const g =
-      t.mudCut.g *
-      scale.eqMul *
-      (actions.has('cut_mud') ? 0.7 + 0.5 * sev('cut_mud') : 0.45);
+    const mudScale = lowEndProtected ? 0.45 : 0.7 + 0.5 * sev('cut_mud');
+    const g = t.mudCut.g * scale.eqMul * mudScale;
     eq.push({
       type: 'peak',
       freq: t.mudCut.f,
       gain: polish(g),
       q: t.mudCut.q,
       label: 'Mud cut',
-      reason: '250–500 Hz masking / congestion',
+      reason: 'Frequency masking in 250–500 Hz (subtractive EQ)',
     });
-    if (t.boxCut && actions.has('cut_mud')) {
+    if (t.boxCut && sev('cut_mud') > 0.6) {
       eq.push({
         type: 'peak',
         freq: t.boxCut.f,
-        gain: polish(t.boxCut.g * scale.eqMul),
+        gain: polish(t.boxCut.g * scale.eqMul * (lowEndProtected ? 0.5 : 1)),
         q: t.boxCut.q,
         label: 'Boxiness',
         reason: 'Clear low-mid box',
@@ -175,42 +184,52 @@ export function planSession(diag, settings) {
     }
   }
 
+  // Sub trim — soft on protected low-end genres (EDM wants impact)
   if (actions.has('cut_sub')) {
+    const trim = lowEndProtected
+      ? -0.8 * sev('cut_sub') * scale.eqMul
+      : -2.0 * sev('cut_sub') * scale.eqMul;
     eq.push({
       type: 'lowshelf',
       freq: 45,
-      gain: polish(-2.0 * sev('cut_sub') * scale.eqMul),
+      gain: polish(trim),
       label: 'Sub trim',
-      reason: 'Sub overweight — keep punch, lose boom',
+      reason: lowEndProtected
+        ? 'Slight boom control only — keep EDM/club weight'
+        : 'Sub overweight — keep punch, lose boom',
     });
   }
 
+  // Low shelf — for EDM always apply genre weight unless cutting sub hard
   if (actions.has('boost_upper_bass') || (t.upperBassShelf && !actions.has('cut_sub'))) {
     const shelf = t.upperBassShelf || t.lowShelf;
     if (shelf) {
       const g =
         (shelf.g || 0.6) *
         scale.eqMul *
-        (actions.has('boost_upper_bass') ? 1.0 : 0.45);
+        (actions.has('boost_upper_bass') ? 1.0 : lowEndProtected ? 0.85 : 0.45);
       if (Math.abs(g) > 0.15) {
         eq.push({
           type: 'lowshelf',
           freq: shelf.f,
           gain: polish(g),
           label: 'Upper-bass weight',
-          reason: '80–150 Hz for small-speaker translation',
+          reason: 'Low-end impact + small-speaker translation',
         });
       }
     }
   } else if (t.lowShelf && !actions.has('cut_sub')) {
-    const g = t.lowShelf.g * 0.45 * scale.eqMul + (settings.bass || 0) * 0.3;
+    const baseMul = lowEndProtected ? 0.85 : 0.45;
+    const g = t.lowShelf.g * baseMul * scale.eqMul + (settings.bass || 0) * 0.3;
     if (Math.abs(g) > 0.15) {
       eq.push({
         type: 'lowshelf',
         freq: t.lowShelf.f,
         gain: polish(g),
         label: 'Low shelf',
-        reason: 'Genre low-end character',
+        reason: lowEndProtected
+          ? 'Maximize low-end impact (genre signature)'
+          : 'Genre low-end character',
       });
     }
   }
@@ -343,7 +362,16 @@ export function planSession(diag, settings) {
 
   // Reference tone match (after diagnosis EQ — Matchering pull)
   if (refProfile) {
-    const matchMoves = referenceMatchEq(diag.regions, refProfile, 0.32 * scale.eqMul);
+    let matchMoves = referenceMatchEq(diag.regions, refProfile, 0.32 * scale.eqMul);
+    // Don't let refs scoop EDM/club low end
+    if (lowEndProtected) {
+      matchMoves = matchMoves.map((m) => {
+        if ((m.label === 'Match sub' || m.label === 'Match bass') && m.gain < 0) {
+          return { ...m, gain: m.gain * 0.35 };
+        }
+        return m;
+      }).filter((m) => Math.abs(m.gain) >= 0.3);
+    }
     for (const m of matchMoves) {
       eq.push({ ...m, gain: polish(m.gain) });
     }
@@ -355,13 +383,16 @@ export function planSession(diag, settings) {
     }
   }
 
-  // Room translation EQ (car: pre-empt cabin boom / keep presence)
+  // Room translation EQ — car: presence/air OK; soft bass cuts on bass genres
   if (room.translateEq?.length) {
+    const bassMul = lowEndProtected ? 0.35 : 0.9;
     for (const b of room.translateEq) {
+      let g = (b.gain || 0) * 0.9;
+      if (g < 0 && (b.freq || 0) < 250) g *= bassMul;
       eq.push({
         type: b.type === 'peak' ? 'peak' : b.type,
         freq: b.freq,
-        gain: polish((b.gain || 0) * 0.9),
+        gain: polish(g),
         q: b.q || 1,
         label: b.label || `Room ${room.label}`,
         reason: b.reason || room.desc,
@@ -369,7 +400,9 @@ export function planSession(diag, settings) {
     }
     log.push({
       type: 'decision',
-      text: `Decision: ${room.label} translation EQ — mix should read outside the studio.`,
+      text: lowEndProtected
+        ? `Decision: ${room.label} translation — keep club weight, light cabin tweaks only.`
+        : `Decision: ${room.label} translation EQ — mix should read outside the studio.`,
     });
   }
 
@@ -404,30 +437,58 @@ export function planSession(diag, settings) {
     });
   }
 
-  // Stereo plan — prefer reference width when available
+  // Stereo plan — MasteringBOX: center essentials; widen supports.
+  // Never collapse width unless phase/correlation is bad (EDM felt “more mono”).
+  const measuredW = diag.stereo?.width ?? 0.15;
   let widthTarget = pb.checks.targetWidth;
   if (refProfile) {
-    widthTarget = clamp(refProfile.width, 0.06, 0.28);
+    widthTarget = clamp(refProfile.width, 0.08, 0.35);
   }
-  if (actions.has('widen')) widthTarget = Math.min(0.28, widthTarget * 1.2);
-  if (actions.has('narrow') || actions.has('fix_phase')) {
-    widthTarget = Math.min(widthTarget, 0.12);
+
+  let widthMode = 'preserve'; // preserve | widen | tighten
+  if (actions.has('fix_phase') || actions.has('narrow')) {
+    widthMode = 'tighten';
+    widthTarget = Math.min(widthTarget, measuredW * 0.85, 0.14);
+  } else if (wideSides || actions.has('widen')) {
+    widthMode = 'widen';
+    // Never pull below current image — only open sides for ear candy
+    widthTarget = Math.max(measuredW, pb.checks.targetWidth);
+    if (actions.has('widen') || wideSides) {
+      widthTarget = Math.min(0.36, widthTarget * (actions.has('widen') ? 1.18 : 1.08));
+    }
+  } else {
+    widthMode = 'preserve';
+    widthTarget = Math.max(measuredW * 0.97, Math.min(widthTarget, measuredW * 1.05));
   }
+
   widthTarget *= (settings.width || 100) / 100;
-  widthTarget = clamp(widthTarget, 0.05, 0.3);
+  widthTarget = clamp(widthTarget, 0.06, 0.38);
 
   const sideAir = t.airSide
     ? {
         freq: t.airSide.f,
         gain: polish(
-          t.airSide.g * scale.eqMul * (actions.has('widen') ? 1.0 : 0.55)
+          t.airSide.g * scale.eqMul * (widthMode === 'widen' ? 1.05 : 0.55)
         ),
       }
     : null;
   log.push({
     type: 'decision',
-    text: `Decision: stereo width ~${(widthTarget * 100).toFixed(0)}% · bass mono below ${t.monoBassHz} Hz.`,
+    text: `Decision: stereo ${widthMode} → ~${(widthTarget * 100).toFixed(0)}% (was ${(measuredW * 100).toFixed(0)}%) · mono-safe below ${t.monoBassHz} Hz only — not a full mono collapse.`,
   });
+
+  // Transient enhance (EDM kicks / synth stabs — MasteringBOX / Production Expert)
+  let transient = null;
+  if (t.transientEnhance?.enabled && !protect) {
+    transient = {
+      bandHz: t.transientEnhance.bandHz || 120,
+      attackDb: (t.transientEnhance.attackDb || 1.2) * scale.eqMul * 0.85,
+    };
+    log.push({
+      type: 'decision',
+      text: `Decision: transient polish +${transient.attackDb.toFixed(1)} dB on low attack — punch without loudness race.`,
+    });
+  }
 
   // Glue / sat — heavily restrained (user: Medium EDM was crushed)
   let glue = {
@@ -485,14 +546,18 @@ export function planSession(diag, settings) {
     intensity: scale,
     eq,
     kickBass,
+    transient,
     widthTarget,
+    widthMode,
+    preserveWidth: widthMode !== 'tighten',
     monoBassHz: t.monoBassHz,
     sideAir,
     glue,
     sat,
     protectDynamics: protect,
+    protectLowEnd: lowEndProtected,
     spectrumTarget: refProfile?.regions || pb.spectrum,
-    refineMul: scale.refineMul,
+    refineMul: scale.refineMul * (lowEndProtected ? 0.7 : 1),
     skipHeavyRemould: true,
     peak: {
       softClip,

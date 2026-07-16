@@ -24,10 +24,10 @@ export const ROOMS = {
     ],
     // When polishing *for* car translation: pre-empt cabin boom / loss of presence
     translateEq: [
-      { type: 'lowshelf', freq: 55, gain: -1.2, label: 'Car sub trim', reason: 'Cars exaggerate sub — leave headroom' },
-      { type: 'peak', freq: 180, gain: -1.0, q: 0.9, label: 'Cabin boom', reason: 'Reduce 150–200 Hz car boom' },
-      { type: 'peak', freq: 2500, gain: 0.8, q: 1.0, label: 'Car presence', reason: 'Keep vocals audible in noisy cabin' },
-      { type: 'highshelf', freq: 8000, gain: 0.6, label: 'Car air', reason: 'Compensate muffled highs' },
+      { type: 'lowshelf', freq: 55, gain: -0.6, label: 'Car sub trim', reason: 'Light cabin sub control — keep weight' },
+      { type: 'peak', freq: 180, gain: -0.5, q: 0.9, label: 'Cabin boom', reason: 'Soft 150–200 Hz car boom trim' },
+      { type: 'peak', freq: 2500, gain: 0.9, q: 1.0, label: 'Car presence', reason: 'Keep leads audible in noisy cabin' },
+      { type: 'highshelf', freq: 8000, gain: 0.7, label: 'Car air', reason: 'Compensate muffled highs' },
     ],
   },
 };

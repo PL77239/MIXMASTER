@@ -113,3 +113,52 @@ export async function decodeFile(file) {
     },
   };
 }
+
+/**
+ * Decode a raw ArrayBuffer (from URL fetch) the same way as an upload.
+ * @param {ArrayBuffer} arrayBuffer
+ * @param {string} formatHint wav|flac|mp3|m4a|webm|ogg
+ */
+export async function decodeArrayBuffer(arrayBuffer, formatHint = 'mp3') {
+  const hint = (formatHint || 'mp3').toLowerCase();
+  const format =
+    hint === 'flac' ? 'flac'
+      : hint === 'wav' || hint === 'wave' || hint === 'aif' || hint === 'aiff' ? 'wav'
+        : hint === 'mp3' ? 'mp3'
+          : 'mp3'; // WebAudio decodes m4a/webm/ogg too; we treat as mp3 for re-encode meta
+
+  const bytes = new Uint8Array(arrayBuffer);
+  let meta = {};
+  try {
+    if (format === 'wav') meta = readWavMeta(new DataView(arrayBuffer)) || {};
+    else if (format === 'mp3') meta = readMp3Meta(bytes) || {};
+    else if (format === 'flac') meta = readFlacMeta(bytes) || {};
+  } catch {
+    meta = {};
+  }
+
+  const rate = meta.sampleRate || 44100;
+  let audioBuffer;
+  try {
+    const ctx = new OfflineAudioContext(2, Math.ceil(rate * 0.1), rate);
+    audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+  } catch {
+    const ctx2 = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      audioBuffer = await ctx2.decodeAudioData(arrayBuffer.slice(0));
+    } finally {
+      ctx2.close();
+    }
+  }
+
+  return {
+    audioBuffer,
+    format: ['wav', 'flac', 'mp3'].includes(format) ? format : 'mp3',
+    meta: {
+      sampleRate: audioBuffer.sampleRate,
+      channels: audioBuffer.numberOfChannels,
+      bitDepth: meta.bitDepth || 16,
+      bitrate: meta.bitrate || 0,
+    },
+  };
+}

@@ -4,6 +4,7 @@ import { decodeFile } from './audio/decode.js';
 import { analyzeBuffer } from './audio/analyze.js';
 import { masterTrack } from './audio/engine.js';
 import { getRoom } from './audio/rooms.js';
+import { fetchReferenceFromUrl, qualityBadge } from './audio/fetchReference.js';
 import { encodeBuffer, EXTENSIONS } from './encode/index.js';
 import { drawWaveform, drawSpectrum } from './ui/visualizer.js';
 import { ABPlayer } from './ui/player.js';
@@ -106,11 +107,13 @@ function updateRefHint() {
   const n = state.references.length;
   $('refClearBtn').classList.toggle('hidden', n === 0);
   if (!n) {
-    $('refHint').textContent = 'Analyzed first, then your track is pulled toward them.';
+    $('refHint').textContent = 'Analyzed first, then your track is pulled toward them. Prefer lossless WAV/FLAC.';
     return;
   }
-  $('refHint').textContent =
-    `${n} reference${n > 1 ? 's' : ''}: ${state.references.map((r) => r.name).join(', ')}`;
+  $('refHint').textContent = state.references.map((r) => {
+    const q = r.quality ? ` [${qualityBadge(r.quality)}]` : '';
+    return `${r.name}${q}`;
+  }).join(' · ');
 }
 
 async function handleRefs(fileList) {
@@ -122,13 +125,53 @@ async function handleRefs(fileList) {
   try {
     for (const file of files.slice(0, 4)) {
       const decoded = await decodeFile(file);
-      state.references.push({ name: file.name, audioBuffer: decoded.audioBuffer });
+      const lossless = /\.(wav|flac)$/i.test(file.name);
+      state.references.push({
+        name: file.name,
+        audioBuffer: decoded.audioBuffer,
+        quality: lossless ? 'lossless' : 'lossy',
+        warning: lossless ? null : 'Lossy file — prefer WAV/FLAC when matching.',
+      });
     }
     updateRefHint();
     toast(`Loaded ${files.length} reference track(s) — will analyze before matching.`);
   } catch (err) {
     console.error(err);
     toast('Could not decode a reference file.', true);
+  }
+}
+
+async function handleRefUrl() {
+  const input = $('refUrlInput');
+  const url = (input.value || '').trim();
+  if (!url) {
+    toast('Paste a YouTube, Spotify, or direct audio URL.', true);
+    return;
+  }
+  if (state.references.length >= 4) {
+    toast('Max 4 references.', true);
+    return;
+  }
+  $('refUrlBtn').disabled = true;
+  $('refHint').textContent = 'Fetching reference (prefer lossless when possible)…';
+  try {
+    const decoded = await fetchReferenceFromUrl(url);
+    state.references.push({
+      name: decoded.name,
+      audioBuffer: decoded.audioBuffer,
+      quality: decoded.quality,
+      warning: decoded.warning,
+    });
+    input.value = '';
+    updateRefHint();
+    if (decoded.warning) toast(decoded.warning, true);
+    else toast(`Reference added (${qualityBadge(decoded.quality)}).`);
+  } catch (err) {
+    console.error(err);
+    toast(err.message || 'Could not fetch that link.', true);
+    updateRefHint();
+  } finally {
+    $('refUrlBtn').disabled = false;
   }
 }
 
@@ -142,6 +185,10 @@ function bindRefs() {
   $('refClearBtn').addEventListener('click', () => {
     state.references = [];
     updateRefHint();
+  });
+  $('refUrlBtn').addEventListener('click', handleRefUrl);
+  $('refUrlInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); handleRefUrl(); }
   });
 }
 

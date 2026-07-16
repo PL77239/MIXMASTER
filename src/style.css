@@ -386,6 +386,18 @@ body {
   gap: 8px;
   align-items: center;
 }
+.ref-url-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+}
+.ref-url {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px !important;
+  font-size: 13px !important;
+}
 
 .genre-grid {
   display: grid;

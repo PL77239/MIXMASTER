@@ -256,11 +256,11 @@ export function diagnose(channels, sampleRate, analysis, genreKey) {
       note: `Stereo image is narrow (width ${(stereo.width * 100).toFixed(0)}%). Widening highs/FX while keeping bass mono.`,
       action: 'widen',
     });
-  } else if (stereo.width > 0.35) {
+  } else if (stereo.width > 0.42) {
     findings.push({
       id: 'too_wide',
-      severity: 0.4,
-      note: `Very wide stereo (${(stereo.width * 100).toFixed(0)}%) — mono-check risk. Pulling sides back a touch.`,
+      severity: 0.35,
+      note: `Very wide stereo (${(stereo.width * 100).toFixed(0)}%) — mono-check risk on extremes only.`,
       action: 'narrow',
     });
   }

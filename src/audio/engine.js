@@ -106,14 +106,24 @@ async function midSideShape(inputBuffer, plan) {
   const curW = midE + sideE > 0 ? sideE / (midE + sideE) : 0.05;
   const tgt = plan.widthTarget;
   const curRatio = curW > 1e-6 ? curW / (1 - curW) : 0.03;
-  const tgtRatio = tgt / (1 - tgt);
-  const sideScale = clamp(tgtRatio / Math.max(curRatio, 1e-4), 0.7, 1.6);
+  const tgtRatio = Math.max(0.02, tgt / Math.max(1 - tgt, 0.02));
+  let sideScale = tgtRatio / Math.max(curRatio, 1e-4);
+
+  // Preserve / widen: never collapse the image (EDM “more mono” bug)
+  if (plan.preserveWidth || plan.widthMode === 'preserve' || plan.widthMode === 'widen') {
+    sideScale = clamp(sideScale, 0.95, 1.45);
+  } else {
+    sideScale = clamp(sideScale, 0.75, 1.35);
+  }
+
+  // Mono-safe low end only — highpass sides at monoBassHz (true sub), not mid-bass
+  const monoHz = plan.monoBassHz || 100;
 
   const midOut = await renderGraph(makeBuffer([M], fs), (ctx, source) =>
-    chain([source, peaking(ctx, 1000, 0.15, 0.9)]));
+    chain([source, peaking(ctx, 1000, 0.08, 0.9)]));
 
   const sideNodes = (ctx, source) => {
-    const nodes = [source, highpass(ctx, plan.monoBassHz), highpass(ctx, plan.monoBassHz)];
+    const nodes = [source, highpass(ctx, monoHz), highpass(ctx, monoHz)];
     if (plan.sideAir) nodes.push(highShelf(ctx, plan.sideAir.freq, plan.sideAir.gain));
     return chain(nodes);
   };
@@ -129,6 +139,51 @@ async function midSideShape(inputBuffer, plan) {
     outR[i] = Mp[i] - sw;
   }
   return makeBuffer([outL, outR], fs);
+}
+
+/**
+ * Transient polish on low band (MasteringBOX shaper idea / EDM kick punch).
+ * Boosts attack envelope without broadband loudness.
+ */
+async function transientEnhance(inputBuffer, spec) {
+  if (!spec || !(spec.attackDb > 0.2)) return inputBuffer;
+  const fs = inputBuffer.sampleRate;
+  const channels = getChannelArrays(inputBuffer);
+  const n = channels[0].length;
+  const nCh = channels.length;
+
+  const lowBuf = await renderGraph(inputBuffer, (ctx, source) =>
+    chain([source, lowpass(ctx, spec.bandHz * 1.6), lowpass(ctx, spec.bandHz * 1.6)]));
+  const highBuf = await renderGraph(inputBuffer, (ctx, source) =>
+    chain([source, highpass(ctx, spec.bandHz * 1.6)]));
+
+  const low = [];
+  for (let c = 0; c < nCh; c++) low.push(lowBuf.getChannelData(c));
+
+  const atk = Math.exp(-1 / Math.max(1, 0.003 * fs));
+  const rel = Math.exp(-1 / Math.max(1, 0.08 * fs));
+  let env = 0;
+  let prev = 0;
+  const boost = dbToLin(spec.attackDb);
+  const gainEnv = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let x = 0;
+    for (let c = 0; c < nCh; c++) x += Math.abs(low[c][i]);
+    x /= nCh;
+    env = x > env ? atk * env + (1 - atk) * x : rel * env + (1 - rel) * x;
+    const rise = Math.max(0, env - prev);
+    prev = env;
+    const key = clamp(rise * 40, 0, 1);
+    gainEnv[i] = 1 + key * (boost - 1);
+  }
+
+  const out = channels.map(() => new Float32Array(n));
+  for (let c = 0; c < nCh; c++) {
+    const hi = highBuf.getChannelData(c);
+    const lo = low[c];
+    for (let i = 0; i < n; i++) out[c][i] = hi[i] + lo[i] * gainEnv[i];
+  }
+  return makeBuffer(out, fs);
 }
 
 function gluePass(inputBuffer, plan) {
@@ -180,7 +235,15 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
     await yieldFrame();
   }
 
-  report(0.52, 'Mid/Side — mono bass, width polish…');
+  if (plan.transient) {
+    report(0.45, 'Transient polish (kick/stab attack)…');
+    buf = await transientEnhance(buf, plan.transient);
+    await yieldFrame();
+  }
+
+  report(0.52, plan.preserveWidth
+    ? 'Mid/Side — mono-safe sub only, preserve stereo width…'
+    : 'Mid/Side — mono bass, width polish…');
   buf = await midSideShape(buf, plan);
   await yieldFrame();
 
@@ -199,8 +262,8 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   const tgt = plan.spectrumTarget;
   const refineMul = plan.refineMul ?? 0.18;
   const specs = [
-    { key: 'sub', freq: 40, type: 'lowshelf', max: 1.4 },
-    { key: 'bass', freq: 110, type: 'lowshelf', max: 1.2 },
+    { key: 'sub', freq: 40, type: 'lowshelf', max: plan.protectLowEnd ? 0.8 : 1.4 },
+    { key: 'bass', freq: 110, type: 'lowshelf', max: plan.protectLowEnd ? 0.9 : 1.2 },
     { key: 'lowMid', freq: 350, type: 'peak', max: 1.4 },
     { key: 'mid', freq: 1100, type: 'peak', max: 1.5 },
     { key: 'high', freq: 4500, type: 'peak', max: 1.4 },
@@ -209,6 +272,10 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   for (const s of specs) {
     const cur = Math.max(midRegions[s.key], 1e-6);
     let g = 20 * Math.log10(tgt[s.key] / cur) * refineMul;
+    // Don't scoop protected low end during refine
+    if (plan.protectLowEnd && (s.key === 'sub' || s.key === 'bass') && g < 0) {
+      g *= 0.25;
+    }
     g = clamp(g, -s.max, s.max);
     if (Math.abs(g) < 0.35) continue;
     refine.push({
