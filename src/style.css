@@ -157,8 +157,11 @@ body.is-touch .cursor-glide { display: none !important; }
   position: fixed;
   left: 50%;
   top: var(--logo-top);
-  width: min(58vw, 460px);
-  height: min(28vh, 240px);
+  width: min(72vw, 560px);
+  height: min(32vh, 300px);
+  aspect-ratio: 200 / 110;
+  height: auto;
+  max-height: min(34vh, 310px);
   transform: translate(-50%, -50%) scale(var(--logo-scale));
   transform-origin: 50% 0%;
   z-index: 12;
@@ -192,9 +195,8 @@ body.is-touch .cursor-glide { display: none !important; }
 }
 @media screen and (max-width: 700px) {
   .logo3d {
-    width: 72vw;
-    height: 28vh;
-    top: 38vh;
+    width: 84vw;
+    top: 40vh;
   }
 }
 

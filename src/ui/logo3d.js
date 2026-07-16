@@ -174,6 +174,66 @@ export function initLogo3d() {
     side: THREE.DoubleSide,
   });
 
+  const extrudeOpts = {
+    depth: 18,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    steps: 4,
+    bevelSize: 0.45,
+    bevelThickness: 0.9,
+    curveSegments: 24,
+  };
+
+  /** pxpush-style outer elliptical ring — matches logo.svg viewBox 0 0 200 110 */
+  const makeEllipseRing = (cx = 100, cy = 55, rx = 96, ry = 50, irx = 86, iry = 42, segs = 72) => {
+    const shape = new THREE.Shape();
+    for (let i = 0; i <= segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      const x = cx + Math.cos(a) * rx;
+      const y = cy + Math.sin(a) * ry;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    }
+    const hole = new THREE.Path();
+    for (let i = 0; i <= segs; i++) {
+      const a = -(i / segs) * Math.PI * 2;
+      const x = cx + Math.cos(a) * irx;
+      const y = cy + Math.sin(a) * iry;
+      if (i === 0) hole.moveTo(x, y);
+      else hole.lineTo(x, y);
+    }
+    shape.holes.push(hole);
+    return new THREE.ExtrudeGeometry(shape, {
+      ...extrudeOpts,
+      depth: 22,
+      bevelSize: 0.6,
+      bevelThickness: 1.1,
+    });
+  };
+
+  const finalizeLogo = () => {
+    if (disposed) return;
+    const box = new THREE.Box3().setFromObject(group);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    group.children.forEach((child) => {
+      if (child.isMesh) {
+        child.geometry.translate(-center.x, -center.y, -center.z);
+        child.geometry.scale(1, -1, 1);
+        child.geometry.computeVertexNormals();
+      }
+    });
+    sizeHint = size.clone();
+    group.rotation.set(0.08, -0.55, 0);
+    fit();
+    root.classList.add('is-ready');
+    if (!reduce) kick();
+    else renderer.render(scene, camera);
+  };
+
+  // Outer ellipse first (same coordinate space as logo.svg viewBox 0 0 200 110)
+  group.add(new THREE.Mesh(makeEllipseRing(), material));
+
   const loader = new SVGLoader();
   loader.load(
     logoUrl,
@@ -181,39 +241,17 @@ export function initLogo3d() {
       if (disposed) return;
       data.paths.forEach((path) => {
         SVGLoader.createShapes(path).forEach((shape) => {
-          const geo = new THREE.ExtrudeGeometry(shape, {
-            depth: 28,
-            bevelEnabled: true,
-            bevelSegments: 2,
-            steps: 8,
-            bevelSize: 0.55,
-            bevelThickness: 1.1,
-            curveSegments: 40,
-          });
+          const geo = new THREE.ExtrudeGeometry(shape, extrudeOpts);
           group.add(new THREE.Mesh(geo, material));
         });
       });
-
-      const box = new THREE.Box3().setFromObject(group);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      group.children.forEach((child) => {
-        if (child.isMesh) {
-          child.geometry.translate(-center.x, -center.y, -center.z);
-          child.geometry.scale(1, -1, 1);
-          child.geometry.computeVertexNormals();
-        }
-      });
-      sizeHint = size.clone();
-      group.rotation.set(0, -0.45, 0);
-      fit();
-      root.classList.add('is-ready');
-      if (!reduce) kick();
-      else renderer.render(scene, camera);
+      finalizeLogo();
     },
     undefined,
     () => {
-      root.classList.add('is-fallback');
+      // Ring alone is still a usable mark if SVG fails
+      finalizeLogo();
+      if (!group.children.length) root.classList.add('is-fallback');
     }
   );
 
