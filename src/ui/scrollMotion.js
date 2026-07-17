@@ -1,7 +1,7 @@
 /**
  * pxpush-style scroll motion — native document flow (always scrollable
  * both ways). Sections shove previous content up by normal scrolling.
- * Effects: expand-on-enter, clip reveal, soft hero leave.
+ * Effects: expand-on-enter / collapse-on-leave (works scrolling down and up).
  * Marquees keep their constant CSS glide (no enter fade / no scroll drift).
  */
 
@@ -19,46 +19,55 @@ function expandables(root) {
   );
 }
 
+function setExpandState(el, on) {
+  const kids = expandables(el);
+  if (on) {
+    kids.forEach((child, i) => {
+      child.style.setProperty('--expand-delay', `${90 + i * 85}ms`);
+    });
+  } else {
+    // Reverse path: collapse together, no stagger
+    kids.forEach((child) => {
+      child.style.setProperty('--expand-delay', '0ms');
+    });
+  }
+  requestAnimationFrame(() => {
+    el.classList.toggle('is-in', on);
+    kids.forEach((child) => child.classList.toggle('is-in', on));
+  });
+}
+
 export function initScrollMotion() {
-  const bands = [...document.querySelectorAll('.band.reveal, .desk-top')];
+  const bands = [...document.querySelectorAll('.band.reveal')];
+  const hero = document.querySelector('.desk-top');
 
   document.documentElement.classList.add('has-scroll-motion');
 
-  // Hero content visible immediately
+  // Hero content always visible
   document.querySelectorAll('.desk-top [data-expand], .hero [data-expand]').forEach((n) => {
     n.classList.add('is-in');
   });
-  document.querySelector('.desk-top')?.classList.add('is-in');
+  hero?.classList.add('is-in');
 
   if (reduceMotion()) {
     document.querySelectorAll('.reveal, [data-expand]').forEach((n) => n.classList.add('is-in'));
     return () => document.documentElement.classList.remove('has-scroll-motion');
   }
 
-  const seen = new WeakSet();
   const io = new IntersectionObserver(
     (entries) => {
       for (const e of entries) {
-        if (!e.isIntersecting || seen.has(e.target)) continue;
-        seen.add(e.target);
         const el = e.target;
-        expandables(el).forEach((child, i) => {
-          child.style.setProperty('--expand-delay', `${90 + i * 85}ms`);
-        });
-        requestAnimationFrame(() => {
-          el.classList.add('is-in');
-          expandables(el).forEach((child) => {
-            child.classList.add('is-in');
-          });
-        });
+        // Skip hero — it stays open
+        if (el.classList.contains('desk-top')) continue;
+        setExpandState(el, e.isIntersecting && e.intersectionRatio > 0.06);
       }
     },
-    { rootMargin: '0px 0px -12% 0px', threshold: 0.08 }
+    { rootMargin: '0px 0px -8% 0px', threshold: [0, 0.08, 0.16, 0.28] }
   );
   bands.forEach((b) => io.observe(b));
 
   // Soft parallax on leaving hero (opacity only — no layout-breaking scale)
-  const hero = document.querySelector('.desk-top');
   let raf = 0;
 
   function tick() {

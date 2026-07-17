@@ -604,10 +604,20 @@ function bindResultControls() {
     $('playBtn').textContent = playing ? '❚❚' : '▶';
   });
   const scrub = document.querySelector('.scrub');
-  scrub.addEventListener('click', (e) => {
+  const scrubTo = (clientX) => {
     const rect = scrub.getBoundingClientRect();
-    player.seek((e.clientX - rect.left) / rect.width);
+    const t = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    player.seek(t);
+  };
+  scrub.addEventListener('pointerdown', (e) => {
+    scrub.setPointerCapture(e.pointerId);
+    scrubTo(e.clientX);
   });
+  scrub.addEventListener('pointermove', (e) => {
+    if (!scrub.hasPointerCapture(e.pointerId)) return;
+    scrubTo(e.clientX);
+  });
+  scrub.addEventListener('click', (e) => scrubTo(e.clientX));
 
   $('downloadBtn').addEventListener('click', () => {
     if (!state.outputBlob) return;

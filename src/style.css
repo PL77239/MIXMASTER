@@ -472,6 +472,23 @@ body.has-tidewave .btn--primary:hover {
   --band-surface: rgba(255, 255, 255, 0.08);
   --band-accent: #9eb6ff;
 }
+/* Soft handoff toward footer collage (seam lives on .foot-bridge) */
+.band--navy::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: clamp(40px, 6vw, 72px);
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(10, 61, 145, 0.55) 55%,
+    #0a3d91 100%
+  );
+}
 .band--ink {
   --band-bg: #121212;
   --band-fg: #eceae4;
@@ -604,14 +621,14 @@ body.has-tidewave .btn--primary:hover {
   /* Collage fills the tile width via cover (uniform zoom, no stretch) */
   --band-bg: #0a0a0a;
   padding: 0;
-  min-height: clamp(200px, 32vw, 360px);
+  min-height: clamp(220px, 34vw, 380px);
   display: flex;
   align-items: flex-end;
-  background-color: #081428;
+  background-color: #0a3d91;
   overflow: hidden;
   isolation: isolate;
 }
-/* Blurred collage layer — softens busy photo to sit next to the navy tile */
+/* Blurred collage — masked so the top stays solid navy before the photo reads */
 .footnote-band::after {
   content: '';
   position: absolute;
@@ -625,26 +642,37 @@ body.has-tidewave .btn--primary:hover {
   background-repeat: no-repeat;
   filter: blur(16px) saturate(0.85) brightness(0.72);
   transform: scale(1.06);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.35) 28%,
+    #000 58%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.35) 28%,
+    #000 58%,
+    #000 100%
+  );
 }
-/* Navy-leaning scrim — bridges Nº003 blue and keeps credit readable */
+/* Navy → collage scrim — seamless from Nº003 blue into the picture */
 .footnote-band::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background:
-    linear-gradient(
-      to top,
-      rgba(4, 12, 28, 0.88) 0%,
-      rgba(10, 40, 90, 0.55) 42%,
-      rgba(10, 61, 145, 0.38) 100%
-    ),
-    linear-gradient(
-      120deg,
-      rgba(10, 61, 145, 0.28) 0%,
-      transparent 55%
-    );
+  background: linear-gradient(
+    to bottom,
+    #0a3d91 0%,
+    rgba(10, 61, 145, 0.92) 14%,
+    rgba(10, 61, 145, 0.55) 32%,
+    rgba(8, 28, 70, 0.35) 52%,
+    rgba(4, 12, 28, 0.55) 72%,
+    rgba(4, 12, 28, 0.86) 100%
+  );
 }
 .footnote-band .band__frame {
   width: 100%;
@@ -655,6 +683,22 @@ body.has-tidewave .btn--primary:hover {
   color: rgba(255, 255, 255, 0.94);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
   padding: 28px 0 36px;
+}
+
+/* Bridge strip: blue sector → footer picture */
+.foot-bridge {
+  height: clamp(56px, 9vw, 110px);
+  margin-bottom: calc(-1 * clamp(56px, 9vw, 110px));
+  position: relative;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    #0a3d91 0%,
+    #0a3d91 22%,
+    rgba(10, 61, 145, 0.65) 55%,
+    rgba(10, 61, 145, 0) 100%
+  );
 }
 
 /* ---------- Hero ---------- */
@@ -1106,16 +1150,44 @@ input[type="range"]::-moz-range-thumb {
   min-width: 200px;
 }
 .scrub {
+  position: relative;
   flex: 1;
-  height: 2px;
-  background: var(--line);
-  cursor: none;
-  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  cursor: pointer;
+  overflow: visible;
+  touch-action: none;
+}
+/* Larger grab target without changing layout much */
+.scrub::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -14px;
+  bottom: -14px;
 }
 .scrub__fill {
+  position: relative;
   height: 100%;
   width: 0;
+  border-radius: inherit;
   background: var(--accent);
+  pointer-events: none;
+}
+.scrub__fill::after {
+  content: '';
+  position: absolute;
+  right: -7px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transform: translateY(-50%);
 }
 .time {
   font-family: var(--mono);
@@ -1347,12 +1419,17 @@ input[type="range"]::-moz-range-thumb {
   opacity: 0;
   transform: translateY(40px);
   transition:
-    opacity 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) 80ms,
-    transform 1s cubic-bezier(0.16, 1, 0.3, 1) 80ms;
+    opacity 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) 80ms,
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 80ms;
 }
 .band.reveal.is-in .band__frame {
   opacity: 1;
   transform: none;
+}
+/* Leaving: mirror the enter path (collapse back when scrolling away / up) */
+.band.reveal:not(.is-in) .band__frame {
+  opacity: 0;
+  transform: translateY(28px);
 }
 /* Marquee headers: never fade/slide with section enter — only CSS glide */
 .band.reveal .band__marquee,
