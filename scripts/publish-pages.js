@@ -23,9 +23,15 @@ cpSync(assetsSrc, assetsDst, { recursive: true });
 writeFileSync(rootIndex, readFileSync(distIndex));
 
 // Root static files from Vite public/ (favicon, etc.)
-for (const name of ['janko.ico']) {
+for (const name of [
+  'janko.ico',
+  'favicon-16.png',
+  'favicon-32.png',
+  'favicon-48.png',
+  'apple-touch-icon.png',
+]) {
   const from = resolve(dist, name);
   if (existsSync(from)) cpSync(from, resolve(root, name));
 }
 
-console.log('Published dist → repo root (index.html + assets/ + favicon) for GitHub Pages');
+console.log('Published dist → repo root (index.html + assets/ + favicons) for GitHub Pages');
