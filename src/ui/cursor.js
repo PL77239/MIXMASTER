@@ -264,17 +264,21 @@ export function initReveals() {
         if (!e.isIntersecting) continue;
         const el = e.target;
         if (el.classList.contains('band')) {
-          el.querySelectorAll('[data-expand]').forEach((child, i) => {
-            child.style.setProperty('--expand-delay', `${90 + i * 90}ms`);
-          });
+          [...el.querySelectorAll('[data-expand]')]
+            .filter((child) => !child.classList.contains('band__marquee') && !child.closest('.band__marquee'))
+            .forEach((child, i) => {
+              child.style.setProperty('--expand-delay', `${90 + i * 90}ms`);
+            });
         }
         // next frame so delays apply before transition starts
         requestAnimationFrame(() => {
           el.classList.add('is-in');
           if (el.classList.contains('band')) {
-            el.querySelectorAll('[data-expand]').forEach((child) => {
-              child.classList.add('is-in');
-            });
+            [...el.querySelectorAll('[data-expand]')]
+              .filter((child) => !child.classList.contains('band__marquee') && !child.closest('.band__marquee'))
+              .forEach((child) => {
+                child.classList.add('is-in');
+              });
           }
         });
         io.unobserve(el);

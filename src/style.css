@@ -607,33 +607,53 @@ body.has-tidewave .btn--primary:hover {
   min-height: clamp(200px, 32vw, 360px);
   display: flex;
   align-items: flex-end;
+  background-color: #081428;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* Blurred collage layer — softens busy photo to sit next to the navy tile */
+.footnote-band::after {
+  content: '';
+  position: absolute;
+  inset: -28px;
+  z-index: 0;
+  pointer-events: none;
   background-color: #0a0a0a;
   background-image: url('./assets/footer-collage.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  filter: blur(16px) saturate(0.85) brightness(0.72);
+  transform: scale(1.06);
 }
+/* Navy-leaning scrim — bridges Nº003 blue and keeps credit readable */
 .footnote-band::before {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
   pointer-events: none;
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.78) 0%,
-    rgba(0, 0, 0, 0.4) 45%,
-    rgba(0, 0, 0, 0.22) 100%
-  );
+  background:
+    linear-gradient(
+      to top,
+      rgba(4, 12, 28, 0.88) 0%,
+      rgba(10, 40, 90, 0.55) 42%,
+      rgba(10, 61, 145, 0.38) 100%
+    ),
+    linear-gradient(
+      120deg,
+      rgba(10, 61, 145, 0.28) 0%,
+      transparent 55%
+    );
 }
 .footnote-band .band__frame {
   width: 100%;
-  z-index: 1;
+  z-index: 2;
 }
 .footnote-band .footnote {
   border-top: none;
-  color: rgba(255, 255, 255, 0.9);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
   padding: 28px 0 36px;
 }
 
@@ -1314,28 +1334,50 @@ input[type="range"]::-moz-range-thumb {
   opacity: 1;
   transform: none;
 }
-/* Bands keep scrub transforms; expand clip on enter */
+
+/* Section tiles: soft clip + content rise — marquees excluded (constant glide) */
 .band.reveal {
-  clip-path: inset(8% 3% 8% 3%);
-  transition: clip-path 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  clip-path: inset(12% 5% 12% 5%);
+  transition: clip-path 1.05s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .band.reveal.is-in {
   clip-path: inset(0 0 0 0);
 }
-
-[data-expand] {
+.band.reveal .band__frame {
   opacity: 0;
-  transform: translateY(22px);
+  transform: translateY(40px);
   transition:
-    opacity 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) var(--expand-delay, 0ms),
-    transform 0.75s cubic-bezier(0.16, 1, 0.3, 1) var(--expand-delay, 0ms);
+    opacity 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) 80ms,
+    transform 1s cubic-bezier(0.16, 1, 0.3, 1) 80ms;
 }
-[data-expand].is-in {
+.band.reveal.is-in .band__frame {
   opacity: 1;
   transform: none;
 }
-html:not(.has-scroll-motion) [data-expand],
-html:not(.has-scroll-motion) .reveal:not(.band) {
+/* Marquee headers: never fade/slide with section enter — only CSS glide */
+.band.reveal .band__marquee,
+.band.reveal .band__marquee.is-in,
+.band__marquee[data-expand],
+.band__marquee[data-expand].is-in {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+[data-expand]:not(.band__marquee) {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) var(--expand-delay, 0ms),
+    transform 0.85s cubic-bezier(0.16, 1, 0.3, 1) var(--expand-delay, 0ms);
+}
+[data-expand]:not(.band__marquee).is-in {
+  opacity: 1;
+  transform: none;
+}
+html:not(.has-scroll-motion) [data-expand]:not(.band__marquee),
+html:not(.has-scroll-motion) .reveal:not(.band),
+html:not(.has-scroll-motion) .band.reveal .band__frame {
   opacity: 1;
   transform: none;
 }
@@ -1361,6 +1403,7 @@ html:not(.has-scroll-motion) .band.reveal {
   .band__marquee-track { animation: none; }
   .reveal:not(.band),
   .band.reveal,
+  .band.reveal .band__frame,
   [data-expand],
   .desk-top,
   .band {
@@ -1368,6 +1411,9 @@ html:not(.has-scroll-motion) .band.reveal {
     transform: none !important;
     clip-path: none !important;
     transition: none !important;
+  }
+  .footnote-band::after {
+    filter: blur(10px) saturate(0.85) brightness(0.72);
   }
   .cursor__ring, .cursor__dot { transition: none; }
   .logo3d { transition: none; }

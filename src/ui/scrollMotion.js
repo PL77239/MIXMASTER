@@ -2,7 +2,7 @@
  * pxpush-style scroll motion — native document flow (always scrollable
  * both ways). Sections shove previous content up by normal scrolling.
  * Effects: expand-on-enter, clip reveal, soft hero leave.
- * Marquees keep their constant CSS glide (no scroll-velocity drift).
+ * Marquees keep their constant CSS glide (no enter fade / no scroll drift).
  */
 
 const reduceMotion = () =>
@@ -10,6 +10,13 @@ const reduceMotion = () =>
 
 function clamp(x, lo, hi) {
   return Math.max(lo, Math.min(hi, x));
+}
+
+/** Expand targets inside a section — never marquees (headers glide only). */
+function expandables(root) {
+  return [...root.querySelectorAll('[data-expand]')].filter(
+    (n) => !n.classList.contains('band__marquee') && !n.closest('.band__marquee')
+  );
 }
 
 export function initScrollMotion() {
@@ -35,18 +42,18 @@ export function initScrollMotion() {
         if (!e.isIntersecting || seen.has(e.target)) continue;
         seen.add(e.target);
         const el = e.target;
-        el.querySelectorAll('[data-expand]').forEach((child, i) => {
-          child.style.setProperty('--expand-delay', `${70 + i * 70}ms`);
+        expandables(el).forEach((child, i) => {
+          child.style.setProperty('--expand-delay', `${90 + i * 85}ms`);
         });
         requestAnimationFrame(() => {
           el.classList.add('is-in');
-          el.querySelectorAll('[data-expand]').forEach((child) => {
+          expandables(el).forEach((child) => {
             child.classList.add('is-in');
           });
         });
       }
     },
-    { rootMargin: '0px 0px -10% 0px', threshold: 0.1 }
+    { rootMargin: '0px 0px -12% 0px', threshold: 0.08 }
   );
   bands.forEach((b) => io.observe(b));
 
