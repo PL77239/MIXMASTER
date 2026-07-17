@@ -572,11 +572,13 @@ export function planSession(diag, settings) {
     ...t.glue,
     threshold: t.glue.threshold - (scale.glueMul < 0.35 ? 5 : 2),
     ratio: 1 + (t.glue.ratio - 1) * scale.glueMul,
-    // Soft knee for optical/hybrid bus glue; tighter for FET desks (metal/podcast)
+    // Soft knee for optical settle; FET uses its own tighter knee in fetCompress
     knee: genreRack.knee ?? 12,
-    // optical → LA-2A/CLA-2A sample-domain stage; fet → DynamicsCompressorNode
+    // series = 1176 → LA-2A; optical / fet = single character
     style: genreRack.glueStyle,
-    opticalBias: genreRack.glueStyle === 'hybrid' ? 0.55 : genreRack.glueStyle === 'optical' ? 1 : 0,
+    chain: genreRack.glueChain || 'series',
+    fetDrive: genreRack.fetDrive ?? 0,
+    opticalDrive: genreRack.opticalDrive ?? 0,
   };
   let sat = clamp(t.sat * scale.satMul, 0, 0.12);
 
@@ -693,7 +695,7 @@ export function planSession(diag, settings) {
     }
     log.push({
       type: 'decision',
-      text: `Decision: Intensity ${scale.label} → glue ${glue.ratio.toFixed(2)}:1 @ ${glue.threshold} dB · knee ${glue.knee} (${genreRack.glueStyle}) · sat ${(sat * 100).toFixed(0)}% (polish).`,
+      text: `Decision: Intensity ${scale.label} → glue ${genreRack.glueChain || genreRack.glueStyle} ${glue.ratio.toFixed(2)}:1 @ ${glue.threshold} dB · FET ${(glue.fetDrive * 100).toFixed(0)}% / LA-2A ${(glue.opticalDrive * 100).toFixed(0)}% · sat ${(sat * 100).toFixed(0)}% (polish).`,
     });
   }
 
@@ -826,7 +828,7 @@ export function planSession(diag, settings) {
   });
   log.push({
     type: 'finding',
-    text: `Desk note (${genreRack.glueStyle}): ${genreRack.note}`,
+    text: `Desk note (${genreRack.glueChain || genreRack.glueStyle}): ${genreRack.note}`,
   });
 
   return planDraft;

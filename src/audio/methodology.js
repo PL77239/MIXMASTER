@@ -9,10 +9,12 @@
  * - iZotope Mixing Guide — parallel compression, harmonic excitement, imaging
  * - Routledge / Evren Göknar “Art of Mastering”: Primary Colors =
  *   EQ → Compressor → Brickwall Limiter; parallel = upward density;
- *   optical soft-knee bus glue vs FET peak control; −14 dBFS reference culture
+ *   classic series bus: FET (1176) peak grab → optical (LA-2A) settle;
+ *   −14 dBFS studio reference culture
  *
  * Used as decision rules in diagnose → plan → polish (not blind remoulding).
- * Dynamics: Web Audio DynamicsCompressorNode (see dsp.js compressor()).
+ * Bus glue: sample-domain 1176 → LA-2A (fetCompress / opticalCompress).
+ * DynamicsCompressorNode remains for multiband / parallel stages (dsp.js).
  */
 
 export const METHODOLOGY = {
@@ -36,7 +38,7 @@ export const METHODOLOGY = {
   primaryColors: {
     order: ['eq', 'compressor', 'brickwall'],
     parallelIsUpward: true,
-    note: 'EQ tonal/surgical → DynamicsCompressorNode glue → true-peak BWL',
+    note: 'EQ tonal/surgical → 1176→LA-2A series glue → true-peak BWL',
   },
 
   // Stereo balance (MasteringBOX): center kick/bass/vocal; width on supports

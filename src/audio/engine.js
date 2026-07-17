@@ -12,7 +12,7 @@ import { planSession } from './planner.js';
 import { peakPolish, maxSafeGainDb, exceedsTruePeak } from './peakPolish.js';
 import {
   renderGraph, chain, peaking, lowShelf, highShelf, highpass, lowpass,
-  gainNode, saturationCurve, compressor, makeBuffer, getChannelArrays, dbToLin,
+  makeBuffer, getChannelArrays, dbToLin,
 } from './dsp.js';
 import {
   multibandCompress,
@@ -21,6 +21,7 @@ import {
   stereoImage,
 } from './stages.js';
 import { opticalCompress } from './opticalCompress.js';
+import { fetCompress } from './fetCompress.js';
 import { getGenreRack } from './rackKnowledge.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -128,48 +129,62 @@ async function transientEnhance(inputBuffer, spec) {
   return makeBuffer(out, fs);
 }
 
+/**
+ * Bus glue: classic 1176 → LA-2A series (genre-weighted), or single-character desks.
+ * Approximations only — no VST / pink-noise captures required.
+ */
 function gluePass(inputBuffer, plan, genreKey) {
-  // Near-bypass when glue/sat are essentially off (protect / open)
   const ratio = plan.glue?.ratio || 1;
   const sat = plan.sat || 0;
   const rack = getGenreRack(genreKey || plan.genre || 'hiphop');
-  const useOptical =
-    plan.glue?.style === 'optical' ||
-    rack.glueStyle === 'optical' ||
-    (rack.glueStyle === 'hybrid' && (plan.glue?.opticalBias ?? 0.5) > 0.45);
+  const chainMode = plan.glue?.chain || rack.glueChain || 'series';
+  const depth = clamp(((ratio - 1) / 1.2) * 0.7 + 0.15, 0.05, 1);
 
-  if (useOptical) {
-    const peakReduction = clamp(
-      ((ratio - 1) / 1.2) * 0.55 + (plan.glue?.peakReduction ?? 0.28),
-      0.05,
-      0.85,
-    );
-    if (peakReduction < 0.06 && sat < 0.02) return inputBuffer;
-    return opticalCompress(inputBuffer, {
-      peakReduction,
-      gain: plan.protectDynamics ? 0.08 : plan.protectLowEnd ? 0.12 : 0.28,
-      thresholdDb: plan.glue?.threshold ?? -24,
-      ratio: Math.min(4, 2.6 + (ratio - 1) * 0.8),
-      kneeDb: plan.glue?.knee ?? rack.knee ?? 18,
-      sat: Math.max(sat, 0.06),
-    });
-  }
+  let fetDrive = plan.glue?.fetDrive ?? rack.fetDrive ?? 0;
+  let opticalDrive = plan.glue?.opticalDrive ?? rack.opticalDrive ?? 0;
+  if (chainMode === 'fet') opticalDrive = 0;
+  if (chainMode === 'optical') fetDrive = Math.min(fetDrive, 0.12);
 
-  if (ratio < 1.08 && sat < 0.02) {
+  fetDrive *= depth;
+  opticalDrive *= depth;
+
+  if (fetDrive < 0.05 && opticalDrive < 0.05 && sat < 0.02) {
     return inputBuffer;
   }
-  return renderGraph(inputBuffer, (ctx, source) => {
-    // DynamicsCompressorNode — threshold/ratio/attack/release/knee from plan
-    const glue = compressor(ctx, {
-      ...plan.glue,
-      knee: plan.glue?.knee ?? 12,
+
+  const protectMul = plan.protectDynamics ? 0.45 : plan.protectLowEnd ? 0.65 : 1;
+  fetDrive *= protectMul;
+  opticalDrive *= protectMul;
+
+  let buf = inputBuffer;
+
+  // 1) FET / 1176 — fast peak grab
+  if (fetDrive >= 0.05) {
+    buf = fetCompress(buf, {
+      inputDrive: clamp(fetDrive, 0.05, 0.95),
+      gain: plan.protectDynamics ? 0.06 : plan.protectLowEnd ? 0.1 : 0.18,
+      thresholdDb: (plan.glue?.threshold ?? -20) + 2,
+      ratio: clamp(4 + fetDrive * 4, 3.5, 8),
+      kneeDb: plan.glue?.fetKnee ?? Math.min(rack.knee ?? 8, 10),
+      attackMs: plan.protectLowEnd ? 1.6 : 0.7,
+      releaseMs: plan.protectLowEnd ? 110 : 70,
+      sat: Math.max(sat * 0.55, fetDrive * 0.05),
     });
-    const shaper = ctx.createWaveShaper();
-    shaper.curve = saturationCurve(sat);
-    shaper.oversample = '2x';
-    const makeup = plan.protectDynamics ? 0.05 : plan.protectLowEnd ? 0.08 : 0.2;
-    return chain([source, glue, shaper, gainNode(ctx, dbToLin(makeup))]);
-  });
+  }
+
+  // 2) Optical / LA-2A — program-dependent settle
+  if (opticalDrive >= 0.05) {
+    buf = opticalCompress(buf, {
+      peakReduction: clamp(opticalDrive, 0.05, 0.9),
+      gain: plan.protectDynamics ? 0.06 : plan.protectLowEnd ? 0.1 : 0.22,
+      thresholdDb: (plan.glue?.threshold ?? -24) - 1,
+      ratio: Math.min(4, 2.5 + opticalDrive * 1.2),
+      kneeDb: plan.glue?.knee ?? Math.max(rack.knee ?? 14, 14),
+      sat: Math.max(sat * 0.7, opticalDrive * 0.05),
+    });
+  }
+
+  return buf;
 }
 
 export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
@@ -234,15 +249,15 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
 
   {
     const rack = getGenreRack(settings.genre);
-    const optical =
-      plan.glue?.style === 'optical' ||
-      rack.glueStyle === 'optical' ||
-      (rack.glueStyle === 'hybrid' && (plan.glue?.opticalBias ?? 0.5) > 0.45);
-    report(0.66, plan.protectDynamics
-      ? 'Dynamics protect — skipping heavy glue…'
-      : (optical
-        ? 'Optical glue (LA-2A / CLA-2A style)…'
-        : 'FET bus glue (1176-style grab)…'));
+    const mode = plan.glue?.chain || rack.glueChain || 'series';
+    const msg = plan.protectDynamics
+      ? 'Dynamics protect — light glue only…'
+      : mode === 'series'
+        ? 'Series glue: 1176 → LA-2A…'
+        : mode === 'optical'
+          ? 'Optical glue (LA-2A / CLA-2A style)…'
+          : 'FET glue (1176-style grab)…';
+    report(0.66, msg);
   }
   buf = await gluePass(buf, plan, settings.genre);
   await yieldFrame();

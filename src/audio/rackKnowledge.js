@@ -3,11 +3,12 @@
  * - Evren Göknar / Routledge “The Art of Mastering in Music” (ch. sample):
  *   Primary Colors = EQ · Compressor · Brickwall Limiter (BWL)
  * - Parallel compression as upward density (valleys up, peaks preserved)
- * - Soft/optical-style bus glue vs FET-style transient control
+ * - Classic bus chain: FET (1176) peak grab → optical (LA-2A) settle
  * - Parametric EQ for surgical cuts; shelves for tonal balance; HPF for rumble
  * - −14 dBFS studio reference culture (pop / rock / hip-hop)
  *
  * These are decision rules for our in-browser rack (Web Audio), not a VST host.
+ * Drives are character weights — no pink-noise / CLA captures required.
  */
 
 /** Ordered polish rack — mirrors a short mastering insert chain. */
@@ -18,111 +19,157 @@ export const RACK_ORDER = [
   'stereo',      // Width / mono-safe lows
   'multiband',   // Band-wise dynamics
   'parallel',    // NY / upward density
-  'glue',        // Bus compressor (optical LA-2A approx or FET DynamicsCompressorNode)
+  'glue',        // Bus: 1176 → LA-2A (or optical-only / FET-only)
   'exciter',     // Harmonic air (optional)
   'peak',        // Soft clip (genre) + brickwall / true-peak limit
 ];
 
 export const PRIMARY_COLORS = {
-  eq: 'Equalizer',
+  eq: 'equalizer',
   compressor: 'dynamics',
   brickwall: 'true-peak limit',
 };
 
 /**
- * Genre desk bias from mastering literature + prior MIXA playbooks.
- * optical = soft knee, slower attack (LA-2A / bus glue character)
- * fet = faster attack, more peak control (1176-ish)
+ * Genre desk bias.
+ * glueChain:
+ *   'series'  — 1176 (FET) then LA-2A (optical) — modern default
+ *   'optical' — LA-2A only (soft desks)
+ *   'fet'     — 1176 only (speech / firm control)
+ * fetDrive / opticalDrive: 0..1 relative intensity within the chain
  */
 export const GENRE_RACK = {
   hiphop: {
-    glueStyle: 'fet',
+    glueChain: 'series',
+    glueStyle: 'series',
+    fetDrive: 0.72,
+    opticalDrive: 0.32,
     knee: 8,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: '1176-led grab first; sub weight + vocal forward',
+    note: '1176 → LA-2A — FET grab first, optical settle; sub + vocal forward',
   },
   pop: {
-    glueStyle: 'fet',
+    glueChain: 'series',
+    glueStyle: 'series',
+    fetDrive: 0.55,
+    opticalDrive: 0.45,
     knee: 10,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'Modern pop — FET grab into soft optical settle',
+    note: '1176 → LA-2A — modern pop series glue',
   },
   edm: {
-    glueStyle: 'fet',
+    glueChain: 'series',
+    glueStyle: 'series',
+    fetDrive: 0.75,
+    opticalDrive: 0.22,
     knee: 8,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'Electronic — fast peak control; maximize low-end impact',
+    note: '1176 → light LA-2A — fast peak control, low-end impact',
   },
   latin: {
-    glueStyle: 'hybrid',
+    glueChain: 'series',
+    glueStyle: 'series',
+    fetDrive: 0.52,
+    opticalDrive: 0.4,
     knee: 12,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'Dembow punch; hybrid glue; transparent peak path',
+    note: '1176 → LA-2A — dembow punch with soft settle; transparent peak',
   },
   rnb: {
-    glueStyle: 'optical',
-    knee: 18,
+    glueChain: 'series',
+    glueStyle: 'series',
+    fetDrive: 0.28,
+    opticalDrive: 0.72,
+    knee: 16,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'LA-2A / CLA-2A optical glue — warm lows, silky presence',
+    note: 'Light 1176 → LA-2A/CLA-2A — warm lows, silky presence',
   },
   lofi: {
+    glueChain: 'optical',
     glueStyle: 'optical',
+    fetDrive: 0,
+    opticalDrive: 0.7,
     knee: 18,
     parallelAsUpward: false,
     referenceDbFs: -14,
-    note: 'Optical warmth; soft glue; no harsh air',
+    note: 'LA-2A only — optical warmth; soft glue; no harsh air',
   },
   rock: {
-    glueStyle: 'fet',
+    glueChain: 'series',
+    glueStyle: 'series',
+    fetDrive: 0.68,
+    opticalDrive: 0.35,
     knee: 8,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: '1176-style attack preserve; mid congestion cuts',
+    note: '1176 → LA-2A — attack preserve then bus glue',
   },
   metal: {
-    glueStyle: 'fet',
+    glueChain: 'series',
+    glueStyle: 'series',
+    fetDrive: 0.8,
+    opticalDrive: 0.18,
     knee: 6,
     parallelAsUpward: false,
     referenceDbFs: -14,
-    note: 'FET peak grab; tight lows; firm limiting',
+    note: '1176 → touch of LA-2A — firm peak grab, tight lows',
   },
   acoustic: {
+    glueChain: 'optical',
     glueStyle: 'optical',
+    fetDrive: 0.08,
+    opticalDrive: 0.75,
     knee: 20,
     parallelAsUpward: false,
     referenceDbFs: -16,
-    note: 'LA-2A optical — near-invisible, natural crest',
+    note: 'LA-2A-led — near-invisible optical; optional hair of FET',
   },
   jazz: {
+    glueChain: 'optical',
     glueStyle: 'optical',
+    fetDrive: 0,
+    opticalDrive: 0.8,
     knee: 22,
     parallelAsUpward: false,
     referenceDbFs: -18,
-    note: 'LA-2A optical — wide dynamics, minimal footprint',
+    note: 'LA-2A only — wide dynamics, minimal footprint',
   },
   classical: {
+    glueChain: 'optical',
     glueStyle: 'optical',
+    fetDrive: 0,
+    opticalDrive: 0.65,
     knee: 22,
     parallelAsUpward: false,
     referenceDbFs: -18,
     note: 'Transparent optical polish — do no harm',
   },
   podcast: {
+    glueChain: 'fet',
     glueStyle: 'fet',
+    fetDrive: 0.85,
+    opticalDrive: 0,
     knee: 6,
     parallelAsUpward: false,
     referenceDbFs: -16,
-    note: 'Speech consistency; firm level control',
+    note: '1176 only — speech consistency; firm level control',
   },
 };
 
 export function getGenreRack(genreKey) {
   return GENRE_RACK[genreKey] || GENRE_RACK.hiphop;
+}
+
+function glueTag(g) {
+  if (g.glueChain === 'series') return '1176→LA-2A';
+  if (g.glueChain === 'optical') return 'LA-2A';
+  if (g.glueChain === 'fet') return '1176';
+  return g.glueStyle || 'glue';
 }
 
 /**
@@ -138,8 +185,7 @@ export function describeRack(plan, genreKey) {
   if (plan?.multiband?.enabled) stages.push('Multiband');
   if (plan?.parallel?.mix > 0.02) stages.push(g.parallelAsUpward ? 'Parallel ↑' : 'Parallel');
   if (plan?.glue?.ratio > 1.05) {
-    const tag = g.glueStyle === 'optical' ? 'LA-2A' : g.glueStyle === 'fet' ? '1176' : 'hybrid';
-    stages.push(`Glue ${tag} ${plan.glue.ratio.toFixed(2)}:1`);
+    stages.push(`Glue ${glueTag(g)} ${plan.glue.ratio.toFixed(2)}:1`);
   }
   if (plan?.exciter?.amount > 0.02) stages.push('Exciter');
   if (plan?.peak) {
@@ -151,6 +197,7 @@ export function describeRack(plan, genreKey) {
   }
   return {
     style: g.glueStyle,
+    chain: g.glueChain,
     knee: g.knee,
     note: g.note,
     stages,
