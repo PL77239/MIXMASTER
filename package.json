@@ -1,0 +1,39 @@
+{
+  "name": "mixmaster-la",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MIXMASTER LA — client-side AI mix & mastering studio",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/clear-root-favicons.js && cp index.dev.html index.html && vite build && node scripts/publish-pages.js",
+    "dev": "node scripts/clear-root-favicons.js && cp index.dev.html index.html && vite",
+    "preview": "vite preview --host",
+    "pages": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PL77239/MIXMASTER.git"
+  },
+  "keywords": [
+    "audio",
+    "mixing",
+    "mastering",
+    "web-audio",
+    "lufs",
+    "loudness"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/PL77239/MIXMASTER/issues"
+  },
+  "homepage": "https://pl77239.github.io/MIXMASTER/",
+  "devDependencies": {
+    "vite": "^5.4.21"
+  },
+  "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
+    "libflacjs": "^5.4.0",
+    "three": "^0.170.0"
+  }
+}

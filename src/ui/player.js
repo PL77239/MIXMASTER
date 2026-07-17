@@ -1,0 +1,190 @@
+// Small A/B audio player driven by two AudioBuffers sharing one timeline.
+// Optional room listen EQ (studio / car) for translation audition.
+// Taps a dry analyser for live peak metering (program peak, before room EQ).
+import { getRoom } from '../audio/rooms.js';
+
+export class ABPlayer {
+  constructor({ onTime, onEnd }) {
+    this.ctx = null;
+    this.buffers = { original: null, mastered: null };
+    this.which = 'original';
+    this.source = null;
+    this.roomNode = null;
+    this.analyser = null;
+    this.meterSink = null;
+    this._peakBuf = null;
+    this.startedAt = 0;
+    this.offset = 0;
+    this.playing = false;
+    this.onTime = onTime;
+    this.onEnd = onEnd;
+    this._raf = null;
+    this.roomId = 'studio';
+  }
+
+  _ensureCtx() {
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  _ensureMeterTap() {
+    if (this.analyser) return;
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 4096;
+    this.analyser.smoothingTimeConstant = 0.5;
+    this.analyser.minDecibels = -95;
+    this.analyser.maxDecibels = -10;
+    // Keep analyser in the graph without contributing audible output
+    this.meterSink = this.ctx.createGain();
+    this.meterSink.gain.value = 0;
+    this.analyser.connect(this.meterSink);
+    this.meterSink.connect(this.ctx.destination);
+    this._peakBuf = new Float32Array(this.analyser.fftSize);
+    this._freqBuf = new Float32Array(this.analyser.frequencyBinCount);
+  }
+
+  /** Instantaneous sample peak (linear 0..∞) of the dry program. */
+  getPeakLin() {
+    if (!this.analyser || !this._peakBuf) return 0;
+    this.analyser.getFloatTimeDomainData(this._peakBuf);
+    let peak = 0;
+    for (let i = 0; i < this._peakBuf.length; i++) {
+      const a = Math.abs(this._peakBuf[i]);
+      if (a > peak) peak = a;
+    }
+    return peak;
+  }
+
+  /** Live FFT bins (dB) for the EQ view — dry program before room EQ. */
+  getFrequencyData() {
+    if (!this.analyser || !this.ctx) return null;
+    if (!this._freqBuf) this._freqBuf = new Float32Array(this.analyser.frequencyBinCount);
+    this.analyser.getFloatFrequencyData(this._freqBuf);
+    return {
+      data: this._freqBuf,
+      sampleRate: this.ctx.sampleRate,
+      fftSize: this.analyser.fftSize,
+    };
+  }
+
+  setBuffers(original, mastered) {
+    this.buffers.original = original;
+    this.buffers.mastered = mastered;
+    this.offset = 0;
+  }
+
+  setRoom(roomId) {
+    this.roomId = roomId || 'studio';
+    if (this.playing) this.play();
+  }
+
+  get duration() {
+    const b = this.buffers[this.which];
+    return b ? b.duration : 0;
+  }
+
+  _stopSource() {
+    if (this.source) {
+      try { this.source.onended = null; this.source.stop(); } catch (e) { /* noop */ }
+      this.source = null;
+    }
+    this.roomNode = null;
+  }
+
+  _buildRoomChain(source) {
+    this._ensureMeterTap();
+    // Dry tap for peak meter (program peaks, not car-EQ inflated)
+    source.connect(this.analyser);
+
+    const room = getRoom(this.roomId);
+    const filters = room.listenEq || [];
+    if (!filters.length) {
+      source.connect(this.ctx.destination);
+      return;
+    }
+    let prev = source;
+    for (const f of filters) {
+      const b = this.ctx.createBiquadFilter();
+      if (f.type === 'lowshelf') {
+        b.type = 'lowshelf';
+        b.frequency.value = f.freq;
+        b.gain.value = f.gain;
+      } else if (f.type === 'highshelf') {
+        b.type = 'highshelf';
+        b.frequency.value = f.freq;
+        b.gain.value = f.gain;
+      } else {
+        b.type = 'peaking';
+        b.frequency.value = f.freq;
+        b.Q.value = f.q || 1;
+        b.gain.value = f.gain;
+      }
+      prev.connect(b);
+      prev = b;
+    }
+    prev.connect(this.ctx.destination);
+    this.roomNode = prev;
+  }
+
+  _tick = () => {
+    if (!this.playing) return;
+    const t = this.offset + (this.ctx.currentTime - this.startedAt);
+    if (t >= this.duration) {
+      this.pause();
+      this.offset = 0;
+      this.onTime && this.onTime(this.duration, this.duration);
+      this.onEnd && this.onEnd();
+      return;
+    }
+    this.onTime && this.onTime(t, this.duration);
+    this._raf = requestAnimationFrame(this._tick);
+  };
+
+  play() {
+    this._ensureCtx();
+    const buffer = this.buffers[this.which];
+    if (!buffer) return;
+    this._stopSource();
+    this.source = this.ctx.createBufferSource();
+    this.source.buffer = buffer;
+    this._buildRoomChain(this.source);
+    this.source.start(0, Math.min(this.offset, buffer.duration - 0.01));
+    this.startedAt = this.ctx.currentTime;
+    this.playing = true;
+    this._raf = requestAnimationFrame(this._tick);
+  }
+
+  pause() {
+    if (this.playing && this.ctx) {
+      this.offset += this.ctx.currentTime - this.startedAt;
+    }
+    this.playing = false;
+    this._stopSource();
+    if (this._raf) cancelAnimationFrame(this._raf);
+  }
+
+  toggle() {
+    if (this.playing) this.pause();
+    else this.play();
+    return this.playing;
+  }
+
+  seek(fraction) {
+    this.offset = Math.max(0, Math.min(1, fraction)) * this.duration;
+    if (this.playing) this.play();
+    else this.onTime && this.onTime(this.offset, this.duration);
+  }
+
+  switchTo(which) {
+    if (which === this.which) return;
+    const wasPlaying = this.playing;
+    if (this.playing) {
+      this.offset += this.ctx.currentTime - this.startedAt;
+      this._stopSource();
+      this.playing = false;
+    }
+    this.which = which;
+    if (wasPlaying) this.play();
+    else this.onTime && this.onTime(this.offset, this.duration);
+  }
+}
