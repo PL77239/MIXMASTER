@@ -450,73 +450,129 @@ function renderNotes(result) {
     open: 'Low', balanced: 'Medium', punchy: 'High',
   }[settings.dynamicsProfile] || settings.dynamicsProfile;
 
-  const logHtml = (engineerLog || [])
-    .map((l) => {
-      if (l.type === 'role') return `<li class="elog elog--role"><b>${l.text}</b></li>`;
-      if (l.type === 'room') return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
-      if (l.type === 'finding') return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
-      if (l.type === 'decision') return `<li class="elog"><span class="elog__mark" aria-hidden="true">→</span> ${l.text}</li>`;
-      if (l.type === 'priorities') return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
-      return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
-    }).join('');
+  const role = (engineerLog || []).find((l) => l.type === 'role')?.text || '';
+  const findings = (engineerLog || []).filter((l) => l.type === 'finding' || l.type === 'room' || l.type === 'priorities');
+  const decisions = (engineerLog || []).filter((l) => l.type === 'decision');
 
-  const clarityLine = clarity
-    ? `<p class="notes__clarity">${
-        clarity.restored
-          ? `Clarity check restored detail (presence ${(clarity.after.presence * 100).toFixed(1)}% · top ${(clarity.after.top * 100).toFixed(1)}%).`
-          : `Clarity check passed — detail held (presence ${(clarity.after.presence * 100).toFixed(1)}% · top ${(clarity.after.top * 100).toFixed(1)}%).`
-      }</p>`
-    : '';
+  const listItems = (items) => items.length
+    ? `<ul class="session__list">${items.map((l) => `<li>${l.text}</li>`).join('')}</ul>`
+    : '<p class="session__empty">None noted.</p>';
 
-  const moves = (corrective || []).length
-    ? corrective.map((m) => `<li><b>${m.band}</b>${m.freq ? ` (${Math.round(m.freq)} Hz)` : ''}:
-        ${m.gain > 0 ? '+' : ''}${(m.gain || 0).toFixed(1)} dB
-        ${m.detail ? `<span style="opacity:.7"> — ${m.detail}</span>` : ''}</li>`).join('')
-    : '<li>No EQ moves needed.</li>';
+  const moveRows = (corrective || []).length
+    ? corrective.map((m) => `
+        <div class="session__row">
+          <span class="session__key">${m.band}${m.freq ? ` <em>${Math.round(m.freq)} Hz</em>` : ''}</span>
+          <span class="session__val">${m.gain > 0 ? '+' : ''}${(m.gain || 0).toFixed(1)} dB</span>
+          <span class="session__note">${m.detail || ''}</span>
+        </div>`).join('')
+    : '<p class="session__empty">No EQ moves needed.</p>';
 
-  const fmtR = (r) => r
-    ? `sub ${(r.sub * 100).toFixed(0)}% · bass ${(r.bass * 100).toFixed(0)}% · low-mid ${(r.lowMid * 100).toFixed(0)}% · mid ${(r.mid * 100).toFixed(0)}% · high ${(r.high * 100).toFixed(0)}% · air ${(r.air * 100).toFixed(0)}%`
-    : '—';
-
-  const kb = plan?.kickBass
-    ? `<li>Kick/bass space: duck ${plan.kickBass.duckDb.toFixed(1)} dB @ ${plan.kickBass.bandHz} Hz</li>`
-    : '<li>Kick/bass: left alone</li>';
-
-  const peak = plan?.peak
-    ? `<li>Peak chain: ${plan.peak.softClip ? 'soft clip → ' : ''}limit @ ${plan.peak.ceilingDb} dBTP</li>`
-    : '';
-
-  const rack = plan?.rack
-    ? `<li>Rack: ${plan.rack.stages.join(' → ')}</li><li class="dim">${plan.rack.primary}</li>`
-    : '';
-
-  const instruments = diag?.instruments?.detected?.length
-    ? `<li>Detected: ${diag.instruments.detected.join(', ')}</li>`
-    : '';
+  const bandRow = (label, r) => {
+    if (!r) return '';
+    const bands = [
+      ['Sub', r.sub],
+      ['Bass', r.bass],
+      ['Low-mid', r.lowMid],
+      ['Mid', r.mid],
+      ['High', r.high],
+      ['Air', r.air],
+    ];
+    return `
+      <div class="session__spectrum">
+        <div class="session__spectrum-label">${label}</div>
+        <div class="session__bars">
+          ${bands.map(([name, v]) => `
+            <div class="session__bar" title="${name} ${(v * 100).toFixed(0)}%">
+              <span class="session__bar-fill" style="height:${Math.max(4, Math.min(100, v * 280))}%"></span>
+              <span class="session__bar-name">${name}</span>
+              <span class="session__bar-pct">${(v * 100).toFixed(0)}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  };
 
   const roomLabel = plan?.room?.label || settings.room || 'Studio';
+  const rackStages = plan?.rack?.stages?.length
+    ? plan.rack.stages.join('  /  ')
+    : 'Minimal';
+  const peakLine = plan?.peak
+    ? `${plan.peak.softClip ? 'Soft clip, then limit' : 'Transparent limit'} @ ${plan.peak.ceilingDb} dBTP`
+    : '—';
+  const kbLine = plan?.kickBass
+    ? `Duck ${plan.kickBass.duckDb.toFixed(1)} dB @ ${plan.kickBass.bandHz} Hz`
+    : 'Left alone';
+  const instruments = diag?.instruments?.detected?.length
+    ? diag.instruments.detected.join(', ')
+    : '—';
   const refLine = plan?.refProfile
-    ? `<li>Matched toward: <b>${plan.refProfile.name}</b> (${plan.refProfile.lufs.toFixed(1)} LUFS)${plan.refFromMemory ? ' · from memory' : ''}</li>`
-    : '<li>No reference tracks — genre polish only</li>';
+    ? `${plan.refProfile.name} (${plan.refProfile.lufs.toFixed(1)} LUFS${plan.refFromMemory ? ', memory' : ''})`
+    : 'Genre polish only';
+  const clarityLine = clarity
+    ? (clarity.restored
+      ? `Restored detail — presence ${(clarity.after.presence * 100).toFixed(1)}%, top ${(clarity.after.top * 100).toFixed(1)}%`
+      : `Held — presence ${(clarity.after.presence * 100).toFixed(1)}%, top ${(clarity.after.top * 100).toFixed(1)}%`)
+    : null;
 
   $('analysisNotes').innerHTML = `
-    <h4>Engineer session</h4>
-    <ul>${logHtml}</ul>
-    ${clarityLine}
-    <h4>Moves applied</h4>
-    <ul>${instruments}${moves}${kb}${peak}${rack}</ul>
-    <h4>Spectral check</h4>
-    <ul>
-      <li>Before: ${fmtR(regionsBefore)}</li>
-      <li>After: ${fmtR(regionsAfter)}</li>
-    </ul>
-    <h4>Delivery</h4>
-    <ul>
-      <li>Genre desk: <b>${genre.label}</b> · Intensity <b>${intensityLabel}</b> · Room <b>${roomLabel}</b></li>
-      ${refLine}
-      <li>Normalized <b>${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB</b>
-        → <b>${settings.targetLufs} LUFS</b></li>
-    </ul>`;
+    <div class="session">
+      <header class="session__head">
+        <p class="session__eyebrow">Engineer session</p>
+        ${role ? `<h4 class="session__role">${role}</h4>` : ''}
+      </header>
+
+      <div class="session__grid">
+        <section class="session__panel">
+          <h5 class="session__title">Findings</h5>
+          ${listItems(findings)}
+        </section>
+        <section class="session__panel">
+          <h5 class="session__title">Decisions</h5>
+          ${listItems(decisions)}
+        </section>
+      </div>
+
+      ${clarityLine ? `
+      <section class="session__panel session__panel--inline">
+        <h5 class="session__title">Clarity</h5>
+        <p class="session__clarity">${clarityLine}</p>
+      </section>` : ''}
+
+      <section class="session__panel">
+        <h5 class="session__title">Chain</h5>
+        <div class="session__kv">
+          <div class="session__row"><span class="session__key">Detected</span><span class="session__val session__val--wide">${instruments}</span></div>
+          <div class="session__row"><span class="session__key">Rack</span><span class="session__val session__val--wide">${rackStages}</span></div>
+          <div class="session__row"><span class="session__key">Kick / bass</span><span class="session__val session__val--wide">${kbLine}</span></div>
+          <div class="session__row"><span class="session__key">Peak</span><span class="session__val session__val--wide">${peakLine}</span></div>
+          ${plan?.rack?.note ? `<p class="session__desk">${plan.rack.note}</p>` : ''}
+        </div>
+      </section>
+
+      <section class="session__panel">
+        <h5 class="session__title">EQ moves</h5>
+        <div class="session__moves">${moveRows}</div>
+      </section>
+
+      <section class="session__panel">
+        <h5 class="session__title">Spectrum</h5>
+        <div class="session__spectrum-pair">
+          ${bandRow('Before', regionsBefore)}
+          ${bandRow('After', regionsAfter)}
+        </div>
+      </section>
+
+      <section class="session__panel session__panel--delivery">
+        <h5 class="session__title">Delivery</h5>
+        <div class="session__kv session__kv--delivery">
+          <div class="session__row"><span class="session__key">Genre</span><span class="session__val">${genre.label}</span></div>
+          <div class="session__row"><span class="session__key">Intensity</span><span class="session__val">${intensityLabel}</span></div>
+          <div class="session__row"><span class="session__key">Room</span><span class="session__val">${roomLabel}</span></div>
+          <div class="session__row"><span class="session__key">Reference</span><span class="session__val session__val--wide">${refLine}</span></div>
+          <div class="session__row"><span class="session__key">Gain</span><span class="session__val">${gainDb >= 0 ? '+' : ''}${gainDb.toFixed(1)} dB</span></div>
+          <div class="session__row"><span class="session__key">Target</span><span class="session__val">${settings.targetLufs} LUFS</span></div>
+        </div>
+      </section>
+    </div>`;
 }
 
 function showResults(result) {
@@ -632,6 +688,7 @@ function bindResultControls() {
     player.seek(t);
   };
   scrub.addEventListener('pointerdown', (e) => {
+    scrub.classList.add('is-active');
     scrub.setPointerCapture(e.pointerId);
     scrubTo(e.clientX);
   });
@@ -639,6 +696,9 @@ function bindResultControls() {
     if (!scrub.hasPointerCapture(e.pointerId)) return;
     scrubTo(e.clientX);
   });
+  scrub.addEventListener('pointerup', () => scrub.classList.remove('is-active'));
+  scrub.addEventListener('pointercancel', () => scrub.classList.remove('is-active'));
+  scrub.addEventListener('lostpointercapture', () => scrub.classList.remove('is-active'));
   scrub.addEventListener('click', (e) => scrubTo(e.clientX));
 
   $('downloadBtn').addEventListener('click', () => {
