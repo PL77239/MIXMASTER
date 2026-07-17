@@ -7,8 +7,12 @@
  * - Mixing & Mastering on the Box — bus / NY parallel / exciters
  * - Digital Natural Sound — multiband tips, gentle master-bus moves
  * - iZotope Mixing Guide — parallel compression, harmonic excitement, imaging
+ * - Routledge / Evren Göknar “Art of Mastering”: Primary Colors =
+ *   EQ → Compressor → Brickwall Limiter; parallel = upward density;
+ *   optical soft-knee bus glue vs FET peak control; −14 dBFS reference culture
  *
  * Used as decision rules in diagnose → plan → polish (not blind remoulding).
+ * Dynamics: Web Audio DynamicsCompressorNode (see dsp.js compressor()).
  */
 
 export const METHODOLOGY = {
@@ -26,6 +30,13 @@ export const METHODOLOGY = {
     mixPeakTargetDb: -6, // classic premaster headroom (guideline, not absolute)
     masterCeilingDbTp: -1.0,
     note: 'Leave space for EQ/limiting; LUFS ≠ headroom',
+  },
+
+  // Routledge primary colors — order of the short mastering rack
+  primaryColors: {
+    order: ['eq', 'compressor', 'brickwall'],
+    parallelIsUpward: true,
+    note: 'EQ tonal/surgical → DynamicsCompressorNode glue → true-peak BWL',
   },
 
   // Stereo balance (MasteringBOX): center kick/bass/vocal; width on supports
@@ -61,7 +72,7 @@ export const METHODOLOGY = {
     correlationWarn: 0.1,
   },
 
-  // Genre signatures (Production Expert, Mastering The Mix, Pirate)
+  // Genre signatures (Production Expert, Mastering The Mix, Pirate, Routledge)
   genres: {
     edm: {
       maximizeLowEndImpact: true, // do NOT gut sub/bass
@@ -70,10 +81,13 @@ export const METHODOLOGY = {
       monoSafeLowEnd: true, // check mono, keep sub centered — keep sides wide above
       brightButNotHarsh: true,
     },
-    hiphop: { heavySub: true, vocalForward: true },
-    pop: { clarityPunch: true, controlledLow: true, sideWidth: true },
-    rock: { preserveDynamics: true, midControl: true, wideGuitars: true },
+    hiphop: { heavySub: true, vocalForward: true, referenceDbFs: -14 },
+    pop: { clarityPunch: true, controlledLow: true, sideWidth: true, referenceDbFs: -14 },
+    rock: { preserveDynamics: true, midControl: true, wideGuitars: true, referenceDbFs: -14 },
+    metal: { tightLows: true, denseMids: true, firmLimit: true },
     acoustic: { warmth: true, naturalDynamics: true },
+    jazz: { openDynamics: true, transparent: true },
+    classical: { doNoHarm: true, broadcastSafePeaks: true },
   },
 };
 

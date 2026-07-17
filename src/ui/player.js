@@ -30,14 +30,17 @@ export class ABPlayer {
   _ensureMeterTap() {
     if (this.analyser) return;
     this.analyser = this.ctx.createAnalyser();
-    this.analyser.fftSize = 2048;
-    this.analyser.smoothingTimeConstant = 0;
+    this.analyser.fftSize = 4096;
+    this.analyser.smoothingTimeConstant = 0.5;
+    this.analyser.minDecibels = -95;
+    this.analyser.maxDecibels = -10;
     // Keep analyser in the graph without contributing audible output
     this.meterSink = this.ctx.createGain();
     this.meterSink.gain.value = 0;
     this.analyser.connect(this.meterSink);
     this.meterSink.connect(this.ctx.destination);
     this._peakBuf = new Float32Array(this.analyser.fftSize);
+    this._freqBuf = new Float32Array(this.analyser.frequencyBinCount);
   }
 
   /** Instantaneous sample peak (linear 0..∞) of the dry program. */
@@ -50,6 +53,18 @@ export class ABPlayer {
       if (a > peak) peak = a;
     }
     return peak;
+  }
+
+  /** Live FFT bins (dB) for the EQ view — dry program before room EQ. */
+  getFrequencyData() {
+    if (!this.analyser || !this.ctx) return null;
+    if (!this._freqBuf) this._freqBuf = new Float32Array(this.analyser.frequencyBinCount);
+    this.analyser.getFloatFrequencyData(this._freqBuf);
+    return {
+      data: this._freqBuf,
+      sampleRate: this.ctx.sampleRate,
+      fftSize: this.analyser.fftSize,
+    };
   }
 
   setBuffers(original, mastered) {

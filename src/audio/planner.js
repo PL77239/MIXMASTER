@@ -21,6 +21,7 @@ import {
 } from './reference.js';
 import { findSimilar } from './refMemory.js';
 import { protectsLowEnd, wantsWideSides } from './methodology.js';
+import { getGenreRack, describeRack } from './rackKnowledge.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
@@ -565,11 +566,14 @@ export function planSession(diag, settings) {
     }
   }
 
-  // Glue / sat — heavily restrained (user: Medium EDM was crushed)
+  // Glue / sat — restrained; knee from genre rack (Routledge optical vs FET bias)
+  const genreRack = getGenreRack(settings.genre);
   let glue = {
     ...t.glue,
     threshold: t.glue.threshold - (scale.glueMul < 0.35 ? 5 : 2),
     ratio: 1 + (t.glue.ratio - 1) * scale.glueMul,
+    // Soft knee for optical/hybrid bus glue; tighter for FET desks (metal/podcast)
+    knee: genreRack.knee ?? 12,
   };
   let sat = clamp(t.sat * scale.satMul, 0, 0.12);
 
@@ -686,7 +690,7 @@ export function planSession(diag, settings) {
     }
     log.push({
       type: 'decision',
-      text: `Decision: Intensity ${scale.label} → glue ${glue.ratio.toFixed(2)}:1 @ ${glue.threshold} dB, sat ${(sat * 100).toFixed(0)}% (polish).`,
+      text: `Decision: Intensity ${scale.label} → glue ${glue.ratio.toFixed(2)}:1 @ ${glue.threshold} dB · knee ${glue.knee} (${genreRack.glueStyle}) · sat ${(sat * 100).toFixed(0)}% (polish).`,
     });
   }
 
@@ -770,7 +774,7 @@ export function planSession(diag, settings) {
     for (const k of Object.keys(spectrumTarget)) spectrumTarget[k] /= sum;
   }
 
-  return {
+  const planDraft = {
     role: pb.role,
     priorities: pb.priorities,
     room,
@@ -810,4 +814,17 @@ export function planSession(diag, settings) {
     log,
     findings: diag.findings,
   };
+
+  const rack = describeRack(planDraft, settings.genre);
+  planDraft.rack = rack;
+  log.push({
+    type: 'decision',
+    text: `Rack: ${rack.stages.join(' → ') || 'minimal'} · ${rack.primary}.`,
+  });
+  log.push({
+    type: 'finding',
+    text: `Desk note (${genreRack.glueStyle}): ${genreRack.note}`,
+  });
+
+  return planDraft;
 }

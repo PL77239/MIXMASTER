@@ -103,6 +103,8 @@ export function saturationCurve(amount) {
 }
 
 export function compressor(ctx, { threshold, ratio, attack, release, knee = 6 }) {
+  // Web Audio DynamicsCompressorNode — same API as MDN docs.
+  // Used for bus glue, multiband bands, and NY parallel wet path.
   const c = ctx.createDynamicsCompressor();
   c.threshold.value = threshold;
   c.ratio.value = ratio;

@@ -9,6 +9,7 @@ import { encodeBuffer, EXTENSIONS } from './encode/index.js';
 import { drawWaveform, drawSpectrum } from './ui/visualizer.js';
 import { ABPlayer } from './ui/player.js';
 import { LivePeakMeter } from './ui/peakMeter.js';
+import { LiveEQ } from './ui/liveEq.js';
 import { initCursor } from './ui/cursor.js';
 import { initTidewave } from './ui/tidewave.js';
 import {
@@ -388,6 +389,13 @@ const peakMeter = new LivePeakMeter({
 });
 peakMeter.start();
 
+const liveEq = new LiveEQ({
+  canvas: $('liveEqCanvas'),
+  getFreq: () => player.getFrequencyData(),
+  isPlaying: () => player.playing,
+});
+liveEq.start();
+
 let currentView = 'original';
 function drawCurrentWave() {
   if (!state.result) return;
@@ -470,6 +478,10 @@ function renderNotes(result) {
     ? `<li>Peak chain: ${plan.peak.softClip ? 'soft clip → ' : ''}limit @ ${plan.peak.ceilingDb} dBTP</li>`
     : '';
 
+  const rack = plan?.rack
+    ? `<li>Rack: ${plan.rack.stages.join(' → ')}</li><li class="dim">${plan.rack.primary}</li>`
+    : '';
+
   const instruments = diag?.instruments?.detected?.length
     ? `<li>Detected: ${diag.instruments.detected.join(', ')}</li>`
     : '';
@@ -483,7 +495,7 @@ function renderNotes(result) {
     <h4>Engineer session</h4>
     <ul>${logHtml}</ul>
     <h4>Moves applied</h4>
-    <ul>${instruments}${moves}${kb}${peak}</ul>
+    <ul>${instruments}${moves}${kb}${peak}${rack}</ul>
     <h4>Spectral check</h4>
     <ul>
       <li>Before: ${fmtR(regionsBefore)}</li>
@@ -514,6 +526,7 @@ function showResults(result) {
   const ceilingDb = result.plan?.peak?.ceilingDb ?? -1.0;
   peakMeter.setCeiling(ceilingDb);
   peakMeter.reset();
+  liveEq.reset();
   renderMeters(result.before, result.after, result.settings.targetLufs, ceilingDb);
   renderNotes(result);
 

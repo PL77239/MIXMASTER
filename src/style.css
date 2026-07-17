@@ -1298,6 +1298,22 @@ input[type="range"]::-moz-range-thumb {
 }
 .peaklive__readout b { color: var(--band-fg, var(--ink)); font-weight: 600; }
 
+.live-eq {
+  margin: 0 0 12px;
+}
+.viz--live-eq {
+  width: 100%;
+  height: 140px;
+  display: block;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.band--navy .viz--live-eq,
+.band--ink .viz--live-eq {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--band-line);
+}
+
 .meters {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

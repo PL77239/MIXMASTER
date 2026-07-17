@@ -134,7 +134,11 @@ function gluePass(inputBuffer, plan) {
     return inputBuffer;
   }
   return renderGraph(inputBuffer, (ctx, source) => {
-    const glue = compressor(ctx, { ...plan.glue, knee: 12 });
+    // DynamicsCompressorNode — threshold/ratio/attack/release/knee from plan
+    const glue = compressor(ctx, {
+      ...plan.glue,
+      knee: plan.glue?.knee ?? 12,
+    });
     const shaper = ctx.createWaveShaper();
     shaper.curve = saturationCurve(sat);
     shaper.oversample = '2x';
