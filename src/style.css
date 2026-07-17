@@ -601,11 +601,40 @@ body.has-tidewave .btn--primary:hover {
   accent-color: #9eb6ff;
 }
 .footnote-band {
-  padding: 3vw 0 5vw;
+  /* Collage fills the tile width via cover (uniform zoom, no stretch) */
+  --band-bg: #0a0a0a;
+  padding: 0;
+  min-height: clamp(200px, 32vw, 360px);
+  display: flex;
+  align-items: flex-end;
+  background-color: #0a0a0a;
+  background-image: url('./assets/footer-collage.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.footnote-band::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.78) 0%,
+    rgba(0, 0, 0, 0.4) 45%,
+    rgba(0, 0, 0, 0.22) 100%
+  );
+}
+.footnote-band .band__frame {
+  width: 100%;
+  z-index: 1;
 }
 .footnote-band .footnote {
-  border-top: 1px solid var(--band-line);
-  color: var(--band-fg-faint);
+  border-top: none;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  padding: 28px 0 36px;
 }
 
 /* ---------- Hero ---------- */
@@ -1314,10 +1343,7 @@ html:not(.has-scroll-motion) .band.reveal {
   clip-path: none;
 }
 
-.footnote-band {
-  padding-top: 4vw;
-  padding-bottom: 4vw;
-}
+/* footnote-band padding owned by collage background block above */
 
 @media (max-width: 720px) {
   .ctl-row { grid-template-columns: 1fr; }
