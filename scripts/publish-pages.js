@@ -24,11 +24,13 @@ writeFileSync(rootIndex, readFileSync(distIndex));
 
 // Root static files from Vite public/ (favicon, etc.)
 for (const name of [
-  'janko.ico',
+  'favicon.ico',
+  'favicon.png',
   'favicon-16.png',
   'favicon-32.png',
   'favicon-48.png',
   'apple-touch-icon.png',
+  'janko.ico',
 ]) {
   const from = resolve(dist, name);
   if (existsSync(from)) cpSync(from, resolve(root, name));

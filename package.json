@@ -5,8 +5,8 @@
   "description": "MIXMASTER LA — client-side AI mix & mastering studio",
   "type": "module",
   "scripts": {
-    "dev": "cp index.dev.html index.html && vite",
-    "build": "cp index.dev.html index.html && vite build && node scripts/publish-pages.js",
+    "build": "node scripts/clear-root-favicons.js && cp index.dev.html index.html && vite build && node scripts/publish-pages.js",
+    "dev": "node scripts/clear-root-favicons.js && cp index.dev.html index.html && vite",
     "preview": "vite preview --host",
     "pages": "npm run build"
   },

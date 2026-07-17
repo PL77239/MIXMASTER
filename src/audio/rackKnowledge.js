@@ -18,7 +18,7 @@ export const RACK_ORDER = [
   'stereo',      // Width / mono-safe lows
   'multiband',   // Band-wise dynamics
   'parallel',    // NY / upward density
-  'glue',        // Bus compressor (DynamicsCompressorNode)
+  'glue',        // Bus compressor (optical LA-2A approx or FET DynamicsCompressorNode)
   'exciter',     // Harmonic air (optional)
   'peak',        // Soft clip (genre) + brickwall / true-peak limit
 ];
@@ -36,88 +36,88 @@ export const PRIMARY_COLORS = {
  */
 export const GENRE_RACK = {
   hiphop: {
-    glueStyle: 'optical',
-    knee: 16,
+    glueStyle: 'fet',
+    knee: 8,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'Sub weight + vocal forward; soft bus glue, transparent limit',
+    note: '1176-led grab first; sub weight + vocal forward',
   },
   pop: {
-    glueStyle: 'optical',
-    knee: 14,
+    glueStyle: 'fet',
+    knee: 10,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'Clarity + controlled low; radio glue without squash',
+    note: 'Modern pop — FET grab into soft optical settle',
   },
   edm: {
+    glueStyle: 'fet',
+    knee: 8,
+    parallelAsUpward: true,
+    referenceDbFs: -14,
+    note: 'Electronic — fast peak control; maximize low-end impact',
+  },
+  latin: {
     glueStyle: 'hybrid',
     knee: 12,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'Maximize low-end impact; transient polish; mono-safe sub only',
-  },
-  latin: {
-    glueStyle: 'optical',
-    knee: 15,
-    parallelAsUpward: true,
-    referenceDbFs: -14,
-    note: 'Dembow punch; light glue; transparent peak path',
+    note: 'Dembow punch; hybrid glue; transparent peak path',
   },
   rnb: {
     glueStyle: 'optical',
-    knee: 16,
+    knee: 18,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'Warm lows, silky presence; gentle dynamics',
+    note: 'LA-2A / CLA-2A optical glue — warm lows, silky presence',
   },
   lofi: {
     glueStyle: 'optical',
     knee: 18,
     parallelAsUpward: false,
     referenceDbFs: -14,
-    note: 'Intentional warmth; soft glue; no harsh air',
+    note: 'Optical warmth; soft glue; no harsh air',
   },
   rock: {
-    glueStyle: 'hybrid',
-    knee: 12,
+    glueStyle: 'fet',
+    knee: 8,
     parallelAsUpward: true,
     referenceDbFs: -14,
-    note: 'Preserve drum/guitar attack; mid congestion cuts',
+    note: '1176-style attack preserve; mid congestion cuts',
   },
   metal: {
     glueStyle: 'fet',
-    knee: 8,
+    knee: 6,
     parallelAsUpward: false,
     referenceDbFs: -14,
-    note: 'Tight lows; denser mid control; firm limiting',
+    note: 'FET peak grab; tight lows; firm limiting',
   },
   acoustic: {
     glueStyle: 'optical',
-    knee: 18,
+    knee: 20,
     parallelAsUpward: false,
     referenceDbFs: -16,
-    note: 'Near-invisible processing; natural crest',
+    note: 'LA-2A optical — near-invisible, natural crest',
   },
   jazz: {
     glueStyle: 'optical',
-    knee: 20,
+    knee: 22,
     parallelAsUpward: false,
     referenceDbFs: -18,
-    note: 'Wide dynamics; minimal footprint',
+    note: 'LA-2A optical — wide dynamics, minimal footprint',
   },
   classical: {
     glueStyle: 'optical',
     knee: 22,
     parallelAsUpward: false,
     referenceDbFs: -18,
-    note: 'Transparent — do no harm; BWL for broadcast safety only',
+    note: 'Transparent optical polish — do no harm',
   },
   podcast: {
     glueStyle: 'fet',
     knee: 6,
     parallelAsUpward: false,
     referenceDbFs: -16,
-    note: 'Speech consistency; de-ess; firm level control',
+    note: 'Speech consistency; firm level control',
   },
 };
 
@@ -137,7 +137,10 @@ export function describeRack(plan, genreKey) {
   if (plan?.widthMode) stages.push(`Stereo ${plan.widthMode}`);
   if (plan?.multiband?.enabled) stages.push('Multiband');
   if (plan?.parallel?.mix > 0.02) stages.push(g.parallelAsUpward ? 'Parallel ↑' : 'Parallel');
-  if (plan?.glue?.ratio > 1.05) stages.push(`Glue ${plan.glue.ratio.toFixed(2)}:1`);
+  if (plan?.glue?.ratio > 1.05) {
+    const tag = g.glueStyle === 'optical' ? 'LA-2A' : g.glueStyle === 'fet' ? '1176' : 'hybrid';
+    stages.push(`Glue ${tag} ${plan.glue.ratio.toFixed(2)}:1`);
+  }
   if (plan?.exciter?.amount > 0.02) stages.push('Exciter');
   if (plan?.peak) {
     stages.push(

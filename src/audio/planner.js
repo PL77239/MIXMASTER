@@ -574,6 +574,9 @@ export function planSession(diag, settings) {
     ratio: 1 + (t.glue.ratio - 1) * scale.glueMul,
     // Soft knee for optical/hybrid bus glue; tighter for FET desks (metal/podcast)
     knee: genreRack.knee ?? 12,
+    // optical → LA-2A/CLA-2A sample-domain stage; fet → DynamicsCompressorNode
+    style: genreRack.glueStyle,
+    opticalBias: genreRack.glueStyle === 'hybrid' ? 0.55 : genreRack.glueStyle === 'optical' ? 1 : 0,
   };
   let sat = clamp(t.sat * scale.satMul, 0, 0.12);
 

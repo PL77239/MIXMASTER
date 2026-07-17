@@ -20,6 +20,8 @@ import {
   harmonicExciter,
   stereoImage,
 } from './stages.js';
+import { opticalCompress } from './opticalCompress.js';
+import { getGenreRack } from './rackKnowledge.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -126,10 +128,33 @@ async function transientEnhance(inputBuffer, spec) {
   return makeBuffer(out, fs);
 }
 
-function gluePass(inputBuffer, plan) {
+function gluePass(inputBuffer, plan, genreKey) {
   // Near-bypass when glue/sat are essentially off (protect / open)
   const ratio = plan.glue?.ratio || 1;
   const sat = plan.sat || 0;
+  const rack = getGenreRack(genreKey || plan.genre || 'hiphop');
+  const useOptical =
+    plan.glue?.style === 'optical' ||
+    rack.glueStyle === 'optical' ||
+    (rack.glueStyle === 'hybrid' && (plan.glue?.opticalBias ?? 0.5) > 0.45);
+
+  if (useOptical) {
+    const peakReduction = clamp(
+      ((ratio - 1) / 1.2) * 0.55 + (plan.glue?.peakReduction ?? 0.28),
+      0.05,
+      0.85,
+    );
+    if (peakReduction < 0.06 && sat < 0.02) return inputBuffer;
+    return opticalCompress(inputBuffer, {
+      peakReduction,
+      gain: plan.protectDynamics ? 0.08 : plan.protectLowEnd ? 0.12 : 0.28,
+      thresholdDb: plan.glue?.threshold ?? -24,
+      ratio: Math.min(4, 2.6 + (ratio - 1) * 0.8),
+      kneeDb: plan.glue?.knee ?? rack.knee ?? 18,
+      sat: Math.max(sat, 0.06),
+    });
+  }
+
   if (ratio < 1.08 && sat < 0.02) {
     return inputBuffer;
   }
@@ -207,10 +232,19 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
     await yieldFrame();
   }
 
-  report(0.66, plan.protectDynamics
-    ? 'Dynamics protect — skipping heavy glue…'
-    : 'Light bus glue (tap, don’t slam)…');
-  buf = await gluePass(buf, plan);
+  {
+    const rack = getGenreRack(settings.genre);
+    const optical =
+      plan.glue?.style === 'optical' ||
+      rack.glueStyle === 'optical' ||
+      (rack.glueStyle === 'hybrid' && (plan.glue?.opticalBias ?? 0.5) > 0.45);
+    report(0.66, plan.protectDynamics
+      ? 'Dynamics protect — skipping heavy glue…'
+      : (optical
+        ? 'Optical glue (LA-2A / CLA-2A style)…'
+        : 'FET bus glue (1176-style grab)…'));
+  }
+  buf = await gluePass(buf, plan, settings.genre);
   await yieldFrame();
 
   if (plan.exciter?.amount > 0.02) {
