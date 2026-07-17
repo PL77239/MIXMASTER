@@ -1377,6 +1377,11 @@ input[type="range"]::-moz-range-thumb {
 .analysis .elog--role {
   margin-bottom: 10px;
 }
+.analysis .notes__clarity {
+  margin: -8px 0 18px;
+  font-size: 13px;
+  color: var(--ink-muted, var(--ink-faint));
+}
 
 .result__note {
   text-align: left;

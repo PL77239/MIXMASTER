@@ -1,8 +1,7 @@
 // Genre-aware diagnostics — what an engineer would notice on first listen.
 // Augmented with instrument-family detection (iZotope Neutron-style group thinking)
 // and peak / over-compression flags (Aurora: treat peaks & limits, not only EQ).
-import { FFT, hann } from './fft.js';
-import { measureRegions } from './analyzeTargets.js';
+import { measureRegions, presenceShare } from './analyzeTargets.js';
 import { getPlaybook } from './playbooks.js';
 import { detectInstruments } from './instruments.js';
 
@@ -35,32 +34,6 @@ function stereoMetrics(channels) {
     width: midE + sideE > 0 ? sideE / (midE + sideE) : 0,
     correlation: sLL > 0 && sRR > 0 ? sLR / Math.sqrt(sLL * sRR) : 1,
   };
-}
-
-/** Presence-band energy share (≈2–5 kHz) — proxy for vocal / lead clarity. */
-function presenceShare(mono, sampleRate) {
-  const size = 2048;
-  const hop = 1024;
-  const fft = new FFT(size);
-  const win = hann(size);
-  const binHz = sampleRate / size;
-  let pres = 0, total = 0;
-  const re = new Float32Array(size);
-  const im = new Float32Array(size);
-  const nFrames = Math.floor((mono.length - size) / hop);
-  const stride = Math.max(1, Math.floor(nFrames / 120));
-  for (let fi = 0; fi < nFrames; fi += stride) {
-    const off = fi * hop;
-    for (let i = 0; i < size; i++) { re[i] = mono[off + i] * win[i]; im[i] = 0; }
-    fft.transform(re, im);
-    for (let b = 1; b < size / 2; b++) {
-      const e = re[b] * re[b] + im[b] * im[b];
-      const f = b * binHz;
-      total += e;
-      if (f >= 2000 && f <= 5000) pres += e;
-    }
-  }
-  return total > 0 ? pres / total : 0;
 }
 
 /**

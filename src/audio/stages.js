@@ -108,7 +108,7 @@ export async function parallelCompress(inputBuffer, spec) {
   const nCh = dry.length;
   const n = dry[0].length;
   const out = dry.map(() => new Float32Array(n));
-  const dryGain = 1 - mix * 0.85;
+  const dryGain = 1 - mix * 0.5;
   for (let c = 0; c < nCh; c++) {
     const w = wet.getChannelData(c);
     const d = dry[c];

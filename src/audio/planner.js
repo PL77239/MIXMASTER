@@ -594,7 +594,7 @@ export function planSession(diag, settings) {
     const lowRatio = 1 + 0.55 * mbMul * (lowEndProtected ? 0.4 : 1);
     // Mid band owns the mud zone — control it harder, refill less
     const midRatio = 1 + 0.85 * mbMul * (actions.has('cut_mud') ? 1.15 : 1);
-    const highRatio = 1 + 0.65 * mbMul;
+    const highRatio = 1 + 0.45 * mbMul;
     const midMakeup = 0.35 * mbMul * (actions.has('cut_mud') ? 0.25 : 1);
     multiband = {
       enabled: true,
@@ -617,12 +617,13 @@ export function planSession(diag, settings) {
         knee: 10,
       },
       high: {
-        threshold: -18,
-        ratio: clamp(highRatio, 1.08, 1.7),
-        attack: 0.01,
-        release: 0.14,
-        makeupDb: 0.22 * mbMul,
-        knee: 8,
+        // Keep presence/air freer — detail lives here
+        threshold: -16,
+        ratio: clamp(highRatio, 1.06, 1.4),
+        attack: 0.015,
+        release: 0.16,
+        makeupDb: 0.12 * mbMul,
+        knee: 10,
       },
     };
     log.push({
@@ -634,9 +635,9 @@ export function planSession(diag, settings) {
   // Parallel NY compression — light on protect-low-end; HPF wet when muddy
   let parallel = null;
   const parallelMix = clamp(
-    0.2 * scale.parallelMul * stageMul,
+    0.16 * scale.parallelMul * stageMul,
     0,
-    lowEndProtected ? 0.14 : actions.has('cut_mud') ? 0.28 : 0.42,
+    lowEndProtected ? 0.12 : actions.has('cut_mud') ? 0.24 : 0.34,
   );
   if (parallelMix >= 0.04 && !protect) {
     parallel = {
@@ -803,6 +804,7 @@ export function planSession(diag, settings) {
     protectDynamics: protect,
     protectLowEnd: lowEndProtected,
     cutMud: actions.has('cut_mud'),
+    cutHarsh: actions.has('tame_air') || actions.has('harsh'),
     mudSeverity: mudSev,
     spectrumTarget,
     refineMul: scale.refineMul * (lowEndProtected ? 0.7 : 1) * (actions.has('cut_mud') ? 0.85 : 1),

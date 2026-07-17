@@ -85,3 +85,48 @@ export function measureRegions(channels, sampleRate) {
     air: frac[8] + frac[9],
   };
 }
+
+/**
+ * Presence-band energy share (≈2–5 kHz) — proxy for vocal / lead clarity / detail.
+ */
+export function presenceShare(mono, sampleRate) {
+  const size = 2048;
+  const hop = 1024;
+  const fft = new FFT(size);
+  const win = hann(size);
+  const binHz = sampleRate / size;
+  let pres = 0;
+  let total = 0;
+  const re = new Float32Array(size);
+  const im = new Float32Array(size);
+  const nFrames = Math.floor((mono.length - size) / hop);
+  const stride = Math.max(1, Math.floor(nFrames / 120));
+  for (let fi = 0; fi < nFrames; fi += stride) {
+    const off = fi * hop;
+    for (let i = 0; i < size; i++) {
+      re[i] = mono[off + i] * win[i];
+      im[i] = 0;
+    }
+    fft.transform(re, im);
+    for (let b = 1; b < size / 2; b++) {
+      const e = re[b] * re[b] + im[b] * im[b];
+      const f = b * binHz;
+      total += e;
+      if (f >= 2000 && f <= 5000) pres += e;
+    }
+  }
+  return total > 0 ? pres / total : 0;
+}
+
+/** Combined clarity snapshot used by the post-master clarity guard. */
+export function measureClarity(channels, sampleRate) {
+  const regions = measureRegions(channels, sampleRate);
+  const mono = monoFromChannels(channels);
+  const presence = presenceShare(mono, sampleRate);
+  return {
+    presence,
+    high: regions.high,
+    air: regions.air,
+    top: regions.high + regions.air,
+  };
+}

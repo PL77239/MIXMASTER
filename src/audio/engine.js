@@ -6,7 +6,7 @@
 import { GENRES } from './genres.js';
 import { analyzeBuffer } from './analyze.js';
 import { measureLoudness } from './lufs.js';
-import { measureRegions } from './analyzeTargets.js';
+import { measureRegions, measureClarity } from './analyzeTargets.js';
 import { diagnose } from './diagnose.js';
 import { planSession } from './planner.js';
 import { peakPolish, maxSafeGainDb, exceedsTruePeak } from './peakPolish.js';
@@ -23,6 +23,7 @@ import {
 import { opticalCompress } from './opticalCompress.js';
 import { fetCompress } from './fetCompress.js';
 import { getGenreRack } from './rackKnowledge.js';
+import { assessClarityLoss } from './clarityGuard.js';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -166,21 +167,21 @@ function gluePass(inputBuffer, plan, genreKey) {
       thresholdDb: (plan.glue?.threshold ?? -20) + 2,
       ratio: clamp(4 + fetDrive * 4, 3.5, 8),
       kneeDb: plan.glue?.fetKnee ?? Math.min(rack.knee ?? 8, 10),
-      attackMs: plan.protectLowEnd ? 1.6 : 0.7,
-      releaseMs: plan.protectLowEnd ? 110 : 70,
-      sat: Math.max(sat * 0.55, fetDrive * 0.05),
+      attackMs: plan.protectLowEnd ? 2.2 : 1.4,
+      releaseMs: plan.protectLowEnd ? 120 : 85,
+      sat: Math.max(sat * 0.4, fetDrive * 0.035),
     });
   }
 
   // 2) Optical / LA-2A — program-dependent settle
   if (opticalDrive >= 0.05) {
     buf = opticalCompress(buf, {
-      peakReduction: clamp(opticalDrive, 0.05, 0.9),
-      gain: plan.protectDynamics ? 0.06 : plan.protectLowEnd ? 0.1 : 0.22,
+      peakReduction: clamp(opticalDrive * 0.92, 0.05, 0.85),
+      gain: plan.protectDynamics ? 0.06 : plan.protectLowEnd ? 0.1 : 0.2,
       thresholdDb: (plan.glue?.threshold ?? -24) - 1,
-      ratio: Math.min(4, 2.5 + opticalDrive * 1.2),
+      ratio: Math.min(3.6, 2.4 + opticalDrive * 1.0),
       kneeDb: plan.glue?.knee ?? Math.max(rack.knee ?? 14, 14),
-      sat: Math.max(sat * 0.7, opticalDrive * 0.05),
+      sat: Math.max(sat * 0.5, opticalDrive * 0.035),
     });
   }
 
@@ -231,6 +232,9 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
     : 'Stereo image — mono bass, width polish…');
   buf = await stereoImage(buf, plan);
   await yieldFrame();
+
+  // Snapshot clarity before density stages scrub presence/air
+  const clarityBefore = measureClarity(getChannelArrays(buf), buf.sampleRate);
 
   if (plan.multiband?.enabled) {
     report(0.56, 'Multiband compress — low / mid / high control…');
@@ -299,6 +303,10 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
         else g *= plan.cutMud ? 1.35 : 1.15;
       }
     }
+    // Preserve detail: resist darkening high/air after glue unless harsh
+    if ((s.key === 'high' || s.key === 'air') && g < 0 && !plan.cutHarsh) {
+      g *= 0.3;
+    }
     g = clamp(g, -s.max, s.max);
     if (Math.abs(g) < 0.35) continue;
     refine.push({
@@ -331,57 +339,55 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
   );
 
   const fs = buf.sampleRate;
-  const base = getChannelArrays(buf);
-  const baseLufs = measureLoudness(base.map((c) => c), fs).integrated;
-  // Genre peak style drives soft-clip — bass desks prefer transparent limit
-  const tpMargin = peak.tpMarginDb ?? (plan.protectLowEnd ? 1.45 : 1.15);
-  const ceilingDb = peak.ceilingDb ?? -1.0;
-  const useSoftClip = Boolean(peak.softClip);
-  const softClipDb = peak.softClipDb ?? -0.5;
-  const softClipAmount = peak.softClipAmount ?? (plan.protectLowEnd ? 0.28 : 0.38);
-  let gainDb = clamp(peak.targetLufs - baseLufs, -18, 14);
-  // Don't ask for more makeup than peak headroom allows (bass-heavy redline fix)
-  gainDb = Math.min(gainDb, maxSafeGainDb(base, ceilingDb, tpMargin));
-
-  let limited = base;
-  let appliedGain = gainDb;
-  for (let iter = 0; iter < 5; iter++) {
-    const polished = peakPolish(base, fs, {
-      gainDb,
-      softClip: useSoftClip,
-      softClipDb,
-      softClipAmount,
-      ceilingDb,
-      tpMarginDb: tpMargin,
-      releaseMs: plan.protectDynamics || plan.protectLowEnd ? 150 : 110,
-      enforce: true,
-    });
-    limited = polished.channels;
-    appliedGain = polished.appliedGainDb;
-
-    const { over, truePeakDb: tp } = exceedsTruePeak(limited, fs, ceilingDb, 0.05);
-    if (over) {
-      // Back off makeup — never chase LUFS into a redline (no second soft-clip rack)
-      gainDb = clamp(gainDb - Math.max(0.35, (tp - ceilingDb) * 1.15), -18, appliedGain - 0.2);
-      continue;
+  let base = getChannelArrays(buf);
+  const runPeakPolish = (channels, startGainDb) => {
+    const baseLufs = measureLoudness(channels.map((c) => c), fs).integrated;
+    const tpMargin = peak.tpMarginDb ?? (plan.protectLowEnd ? 1.45 : 1.15);
+    const ceilingDb = peak.ceilingDb ?? -1.0;
+    const useSoftClip = Boolean(peak.softClip);
+    const softClipDb = peak.softClipDb ?? -0.5;
+    const softClipAmount = peak.softClipAmount ?? (plan.protectLowEnd ? 0.28 : 0.38);
+    let gainDb = clamp(peak.targetLufs - baseLufs, -18, 14);
+    gainDb = Math.min(gainDb, maxSafeGainDb(channels, ceilingDb, tpMargin));
+    if (Number.isFinite(startGainDb)) {
+      gainDb = Math.min(gainDb, startGainDb);
     }
 
-    const achieved = measureLoudness(limited.map((c) => c), fs).integrated;
-    const err = peak.targetLufs - achieved;
-    if (Math.abs(err) < 0.4) break;
-    // Only nudge louder when we still have TP headroom
-    const headroom = ceilingDb - (Number.isFinite(tp) ? tp : ceilingDb);
-    if (err > 0 && headroom < 0.4) break;
-    const next = clamp(gainDb + err * 0.55, -18, 14);
-    gainDb = Math.min(next, maxSafeGainDb(base, ceilingDb, tpMargin));
-    await yieldFrame();
-  }
+    let limited = channels;
+    let appliedGain = gainDb;
+    for (let iter = 0; iter < 5; iter++) {
+      const polished = peakPolish(channels, fs, {
+        gainDb,
+        softClip: useSoftClip,
+        softClipDb,
+        softClipAmount,
+        ceilingDb,
+        tpMarginDb: tpMargin,
+        releaseMs: plan.protectDynamics || plan.protectLowEnd ? 150 : 110,
+        enforce: true,
+      });
+      limited = polished.channels;
+      appliedGain = polished.appliedGainDb;
 
-  // Delivery gate — trim + limit only (never a second soft-clip pass)
-  {
+      const { over, truePeakDb: tp } = exceedsTruePeak(limited, fs, ceilingDb, 0.05);
+      if (over) {
+        gainDb = clamp(gainDb - Math.max(0.35, (tp - ceilingDb) * 1.15), -18, appliedGain - 0.2);
+        continue;
+      }
+
+      const achieved = measureLoudness(limited.map((c) => c), fs).integrated;
+      const err = peak.targetLufs - achieved;
+      if (Math.abs(err) < 0.4) break;
+      const headroom = ceilingDb - (Number.isFinite(tp) ? tp : ceilingDb);
+      if (err > 0 && headroom < 0.4) break;
+      const next = clamp(gainDb + err * 0.55, -18, 14);
+      gainDb = Math.min(next, maxSafeGainDb(channels, ceilingDb, tpMargin));
+    }
+
+    // Delivery gate — trim + limit only (never a second soft-clip pass)
     const check = exceedsTruePeak(limited, fs, ceilingDb, 0.05);
     if (check.over) {
-      const polished = peakPolish(base, fs, {
+      const polished = peakPolish(channels, fs, {
         gainDb: Math.min(appliedGain, gainDb) - Math.max(0.25, (check.truePeakDb - ceilingDb) + 0.2),
         softClip: false,
         ceilingDb,
@@ -392,6 +398,37 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
       limited = polished.channels;
       appliedGain = polished.appliedGainDb;
     }
+    return { limited, appliedGain, ceilingDb, tpMargin };
+  };
+
+  let { limited, appliedGain } = runPeakPolish(base);
+  await yieldFrame();
+
+  // Post-master clarity check — restore presence/air if density scrubbed detail
+  report(0.9, 'Clarity check — presence & air…');
+  let clarityAfter = measureClarity(limited, fs);
+  const clarity = assessClarityLoss(clarityBefore, clarityAfter, {
+    harsh: plan.cutHarsh,
+    protectDynamics: plan.protectDynamics,
+    genre: settings.genre,
+  });
+  if (clarity.lost) {
+    report(0.91, 'Clarity dipped — restoring detail (pre-limit)…');
+    const restoredBuf = await applyEqPlan(makeBuffer(base, fs), clarity.moves);
+    base = getChannelArrays(restoredBuf);
+    ({ limited, appliedGain } = runPeakPolish(base, appliedGain));
+    plan.eq = plan.eq.concat(clarity.moves);
+    clarityAfter = measureClarity(limited, fs);
+    plan.log.push({
+      type: 'decision',
+      text: `Clarity check: presence −${(clarity.presenceDrop * 100).toFixed(1)} pt · top −${(clarity.topDrop * 100).toFixed(1)} pt → restored ${clarity.moves.map((m) => m.label).join(' + ')}.`,
+    });
+    await yieldFrame();
+  } else {
+    plan.log.push({
+      type: 'decision',
+      text: `Clarity check: presence ${(clarityAfter.presence * 100).toFixed(1)}% · top ${(clarityAfter.top * 100).toFixed(1)}% — detail held.`,
+    });
   }
 
   report(0.94, 'Final metering…');
@@ -417,6 +454,12 @@ export async function masterTrack(inputBuffer, analysis, settings, onProgress) {
       })),
     regionsBefore: diag.regions,
     regionsAfter,
+    clarity: {
+      before: clarityBefore,
+      after: clarityAfter,
+      restored: clarity.lost,
+      moves: clarity.moves,
+    },
     gainDb: appliedGain,
     genre,
     settings: { ...settings, targetLufs: peak.targetLufs },

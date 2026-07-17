@@ -444,7 +444,7 @@ function renderMeters(before, after, target, ceilingDb = -1.0) {
 function renderNotes(result) {
   const {
     corrective, gainDb, genre, settings, regionsBefore, regionsAfter,
-    engineerLog, plan, diag,
+    engineerLog, plan, diag, clarity,
   } = result;
   const intensityLabel = {
     open: 'Low', balanced: 'Medium', punchy: 'High',
@@ -459,6 +459,14 @@ function renderNotes(result) {
       if (l.type === 'priorities') return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
       return `<li class="elog"><span class="elog__mark" aria-hidden="true">·</span> ${l.text}</li>`;
     }).join('');
+
+  const clarityLine = clarity
+    ? `<p class="notes__clarity">${
+        clarity.restored
+          ? `Clarity check restored detail (presence ${(clarity.after.presence * 100).toFixed(1)}% · top ${(clarity.after.top * 100).toFixed(1)}%).`
+          : `Clarity check passed — detail held (presence ${(clarity.after.presence * 100).toFixed(1)}% · top ${(clarity.after.top * 100).toFixed(1)}%).`
+      }</p>`
+    : '';
 
   const moves = (corrective || []).length
     ? corrective.map((m) => `<li><b>${m.band}</b>${m.freq ? ` (${Math.round(m.freq)} Hz)` : ''}:
@@ -494,6 +502,7 @@ function renderNotes(result) {
   $('analysisNotes').innerHTML = `
     <h4>Engineer session</h4>
     <ul>${logHtml}</ul>
+    ${clarityLine}
     <h4>Moves applied</h4>
     <ul>${instruments}${moves}${kb}${peak}${rack}</ul>
     <h4>Spectral check</h4>
