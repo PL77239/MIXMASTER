@@ -564,8 +564,6 @@ body.has-tidewave .btn--primary:hover {
 }
 .band--navy .btn--ghost,
 .band--ink .btn--ghost,
-.band--navy .select,
-.band--ink .select,
 .band--navy .room-btn,
 .band--ink .room-btn,
 .band--navy .genre,
@@ -577,6 +575,18 @@ body.has-tidewave .btn--primary:hover {
   color: var(--band-fg);
   border-color: var(--band-line-strong);
   background: transparent;
+}
+/* Loudness / intensity (and other selects): light field + black text — not band white-on-white */
+.band--navy .select,
+.band--ink .select {
+  color: #121212;
+  background: #fff;
+  border-color: var(--band-line-strong);
+}
+.band--navy .select option,
+.band--ink .select option {
+  color: #121212;
+  background: #fff;
 }
 .band--navy .dropzone,
 .band--ink .dropzone,
